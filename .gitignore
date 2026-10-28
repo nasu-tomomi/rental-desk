@@ -1,0 +1,30 @@
+# Rental Desk 用 .gitignore（リポジトリ直下に「.gitignore」という名前で置く）
+
+# Java / Spring Boot
+target/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+
+# IntelliJ IDEA
+.idea/
+*.iml
+out/
+
+# Node / React
+node_modules/
+dist/
+build/
+
+# 環境変数・秘密情報（絶対にコミットしない）
+.env
+.env.local
+*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ログ
+*.log
+logs/
