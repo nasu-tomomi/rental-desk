@@ -5,6 +5,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.NoSuchElementException;
 
 @Service
 public class ReservationService {
@@ -29,7 +30,13 @@ public class ReservationService {
         for (int i = 0; i < request.users().size(); i++) {
             repository.insertUser(id, request.users().get(i), amounts.get(i));
         }
-        return repository.find(id);
+        return get(id);
+    }
+
+    @Transactional(readOnly = true)
+    public ReservationResponse get(long id) {
+        return repository.find(id)
+            .orElseThrow(() -> new NoSuchElementException("指定された予約が存在しません"));
     }
 
     @Transactional(readOnly = true)

@@ -19,6 +19,11 @@ public class ReservationController {
         return ResponseEntity.status(201).body(service.create(request));
     }
 
+    @GetMapping("/{id}")
+    public ReservationResponse get(@PathVariable long id) {
+        return service.get(id);
+    }
+
     @GetMapping
     public List<ReservationResponse> list(
         @RequestParam(required = false) @Size(max = 100) String keyword,

@@ -66,10 +66,39 @@ class ReservationApiTest {
             .andExpect(jsonPath("$.status").value("予約済"))
             .andExpect(jsonPath("$.totalAmount").value(13000))
             .andExpect(jsonPath("$.users.length()").value(2))
+            .andExpect(jsonPath("$.users[0].priceCategory").value("スタンダード"))
+            .andExpect(jsonPath("$.users[0].priceItem").value("スキー OR スノーボード セット"))
             .andExpect(jsonPath("$.users[0].amount").value(10000))
             .andExpect(jsonPath("$.users[1].amount").value(3000));
         assertThat(count("reservations")).isEqualTo(1);
         assertThat(count("reservation_users")).isEqualTo(2);
+    }
+
+    @Test void getsReservationWithUsersAndPriceDetails() throws Exception {
+        var created = service.create(mapper.readValue(REQUEST, ReservationRequest.class));
+        mvc.perform(get("/api/reservations/{id}", created.id()))
+            .andExpect(status().isOk())
+            .andExpect(content().json(mapper.writeValueAsString(created)))
+            .andExpect(jsonPath("$.id").value(created.id()))
+            .andExpect(jsonPath("$.applicantName").value("山田 Alice"))
+            .andExpect(jsonPath("$.users.length()").value(2))
+            .andExpect(jsonPath("$.users[0].userName").value("Alice"))
+            .andExpect(jsonPath("$.users[0].priceMasterId").value(1))
+            .andExpect(jsonPath("$.users[0].priceCategory").value("スタンダード"))
+            .andExpect(jsonPath("$.users[0].priceItem").value("スキー OR スノーボード セット"))
+            .andExpect(jsonPath("$.users[1].userName").value("Bob"))
+            .andExpect(jsonPath("$.users[1].priceMasterId").value(2))
+            .andExpect(jsonPath("$.users[1].priceCategory").value("スタンダード"))
+            .andExpect(jsonPath("$.users[1].priceItem").value("スキー OR スノーボード セット"));
+    }
+
+    @Test void returnsNotFoundForMissingReservation() throws Exception {
+        service.create(mapper.readValue(REQUEST, ReservationRequest.class));
+        mvc.perform(get("/api/reservations/{id}", Long.MAX_VALUE))
+            .andExpect(status().isNotFound())
+            .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+            .andExpect(jsonPath("$.status").value(404))
+            .andExpect(jsonPath("$.detail").value("指定された予約が存在しません"));
     }
 
     @Test void listsAndFiltersByNameKanaRomanLettersAndDate() throws Exception {
@@ -78,7 +107,10 @@ class ReservationApiTest {
         for (String keyword : new String[]{"山田", "ヤマ", "Alice"}) {
             mvc.perform(get("/api/reservations").param("keyword", keyword).param("rentalDate", "2026-11-01"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].users.length()").value(2));
+                .andExpect(jsonPath("$[0].users.length()").value(2))
+                .andExpect(jsonPath("$[0].users[0].priceMasterId").value(1))
+                .andExpect(jsonPath("$[0].users[0].priceCategory").value("スタンダード"))
+                .andExpect(jsonPath("$[0].users[0].priceItem").value("スキー OR スノーボード セット"));
         }
         mvc.perform(get("/api/reservations").param("rentalDate", "2026-11-02"))
             .andExpect(content().json("[]"));

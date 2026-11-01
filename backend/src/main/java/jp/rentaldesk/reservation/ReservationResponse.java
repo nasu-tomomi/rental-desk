@@ -13,5 +13,5 @@ public record ReservationResponse(
 ) {
     public record User(long id, String userName, String division, Integer rentalDays,
         String experience, String height, String shoeSize, Long priceMasterId,
-        String smallItems, String lentSizeMemo, Integer amount) {}
+        String priceCategory, String priceItem, String smallItems, String lentSizeMemo, Integer amount) {}
 }
