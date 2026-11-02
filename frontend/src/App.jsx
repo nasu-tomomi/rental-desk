@@ -14,8 +14,10 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const activeRequest = useRef(null);
+  const searchCriteria = useRef({ keyword: "", rentalDate: "" });
 
   async function loadReservations(searchKeyword = "", searchDate = "") {
+    searchCriteria.current = { keyword: searchKeyword, rentalDate: searchDate };
     activeRequest.current?.abort();
     const controller = new AbortController();
     activeRequest.current = controller;
@@ -45,9 +47,11 @@ export default function App() {
   }
 
   useEffect(() => {
-    loadReservations();
+    if (selectedId !== null) return;
+    const criteria = searchCriteria.current;
+    loadReservations(criteria.keyword, criteria.rentalDate);
     return () => activeRequest.current?.abort();
-  }, []);
+  }, [selectedId]);
 
   function search(event) {
     event.preventDefault();
@@ -126,6 +130,7 @@ export default function App() {
           <thead>
             <tr>
               {[
+                "予約番号",
                 "貸出日",
                 "予約時間",
                 "申込者",
@@ -144,7 +149,7 @@ export default function App() {
           <tbody>
             {loading || error || reservations.length === 0 ? (
               <tr>
-                <td colSpan={8} className="empty">
+                <td colSpan={9} className="empty">
                   {loading
                     ? "予約を読み込んでいます…"
                     : error
@@ -159,6 +164,7 @@ export default function App() {
                   className="reservation-row"
                   onClick={() => setSelectedId(reservation.id)}
                 >
+                  <td className="number">{display(reservation.id)}</td>
                   <td>{display(reservation.rentalDate)}</td>
                   <td>
                     {reservation.pickupTime == null

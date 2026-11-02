@@ -101,6 +101,40 @@ class ReservationApiTest {
             .andExpect(jsonPath("$.detail").value("指定された予約が存在しません"));
     }
 
+    @Test void deletesReservationAndItsUsersOnly() throws Exception {
+        var created = service.create(mapper.readValue(REQUEST, ReservationRequest.class));
+        var other = service.create(mapper.readValue(REQUEST, ReservationRequest.class));
+        mvc.perform(delete("/api/reservations/{id}", created.id())
+                .header("Origin", "http://localhost:5173"))
+            .andExpect(status().isNoContent())
+            .andExpect(content().string(""))
+            .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"));
+        assertThat(count("reservations")).isEqualTo(1);
+        assertThat(count("reservation_users")).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM reservation_users WHERE reservation_id = ?",
+            Integer.class, created.id())).isZero();
+        assertThat(service.get(other.id())).isEqualTo(other);
+        mvc.perform(get("/api/reservations/{id}", created.id())).andExpect(status().isNotFound());
+    }
+
+    @Test void returnsProblemDetailForMissingDeleteId() throws Exception {
+        var other = service.create(mapper.readValue(REQUEST, ReservationRequest.class));
+        mvc.perform(delete("/api/reservations/{id}", Long.MAX_VALUE))
+            .andExpect(status().isNotFound())
+            .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+            .andExpect(jsonPath("$.status").value(404))
+            .andExpect(jsonPath("$.detail").value("指定された予約が存在しません"));
+        assertThat(service.get(other.id())).isEqualTo(other);
+    }
+
+    @Test void allowsDeleteCorsPreflight() throws Exception {
+        mvc.perform(options("/api/reservations/1")
+                .header("Origin", "http://localhost:5173")
+                .header("Access-Control-Request-Method", "DELETE"))
+            .andExpect(status().isOk())
+            .andExpect(header().string("Access-Control-Allow-Methods", org.hamcrest.Matchers.containsString("DELETE")));
+    }
+
     @Test void advancesStatusAndReturnsGetDetail() throws Exception {
         var created = service.create(mapper.readValue(REQUEST, ReservationRequest.class));
         for (String next : new String[]{"受付済", "貸出中", "返却済"}) {

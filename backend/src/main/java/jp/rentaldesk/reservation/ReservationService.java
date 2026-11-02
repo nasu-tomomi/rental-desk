@@ -40,6 +40,14 @@ public class ReservationService {
     }
 
     @Transactional
+    public void delete(long id) {
+        if (!repository.lockReservation(id)) {
+            throw new NoSuchElementException("指定された予約が存在しません");
+        }
+        repository.delete(id);
+    }
+
+    @Transactional
     public ReservationResponse updateStatus(long id, String status) {
         var current = get(id);
         String next = switch (current.status()) {

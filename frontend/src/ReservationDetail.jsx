@@ -97,7 +97,12 @@ export default function ReservationDetail({ id, onBack }) {
   const amounts = users.map((user) => estimate(user, prices));
   const total = amounts.some((amount) => amount == null) ? null : amounts.reduce((sum, amount) => sum + amount, 0);
   const valid = users.length > 0 && total != null && total <= 2147483647;
-  const nextStatus = reservation?.status === "予約済" ? "受付済" : reservation?.status === "受付済" ? "貸出中" : null;
+  const statusActions = {
+    "予約済": { status: "受付済", label: "受付する" },
+    "受付済": { status: "貸出中", label: "貸し出す" },
+    "貸出中": { status: "返却済", label: "返却する" },
+  };
+  const nextAction = statusActions[reservation?.status];
 
   function editUser(userId, field, value) {
     setUsers((current) => current.map((user) => user.id === userId ? { ...user, [field]: value } : user));
@@ -149,11 +154,35 @@ export default function ReservationDetail({ id, onBack }) {
     }
   }
 
+  async function deleteReservation() {
+    if (savingRef.current || !window.confirm(`予約番号：${id}を削除します。利用者情報も削除されます。よろしいですか？`)) return;
+    savingRef.current = true;
+    setSaving(true);
+    setSaveError("");
+    setMessage("");
+    const controller = new AbortController();
+    activeSave.current = controller;
+    try {
+      await requestJson(`${API_URL}/${encodeURIComponent(id)}`, {
+        method: "DELETE", signal: controller.signal,
+      });
+      if (!controller.signal.aborted) onBack();
+    } catch (cause) {
+      if (!controller.signal.aborted) setSaveError(`予約を削除できませんでした。${cause.message}`);
+    } finally {
+      if (!controller.signal.aborted) {
+        savingRef.current = false;
+        setSaving(false);
+      }
+    }
+  }
+
   return (
     <main className="reservation-detail">
       <header>
         <p className="app-name">Rental Desk</p>
         <h1 ref={heading} tabIndex={-1}>予約詳細</h1>
+        {reservation && <p>予約番号：{reservation.id}</p>}
         <button type="button" className="secondary" onClick={onBack} disabled={saving}>一覧へ戻る</button>
       </header>
       {error && <p className="error" role="alert">{error}</p>}
@@ -237,11 +266,12 @@ export default function ReservationDetail({ id, onBack }) {
             <p className="confirmed-total">保存済みの確定合計：{money(reservation.totalAmount)}</p>
             {!valid && users.length > 0 && <p className="error">品目と日数（1〜365の整数）を確認してください。金額は上限2,147,483,647円以内で入力してください。</p>}
             {saveError && <p className="error" role="alert">{saveError}</p>}
-            <p role="status">{saving ? "保存中…" : message}</p>
+            <p role="status" className={!saving && message ? "success" : undefined}>{saving ? "保存中…" : message}</p>
             <div className="actions detail-actions">
+              <button type="button" className="danger" disabled={saving} onClick={deleteReservation}>予約を削除</button>
               <button type="button" disabled={saving || !valid} onClick={() => save()}>変更を保存</button>
-              {nextStatus && <button type="button" disabled={saving || !valid} onClick={() => save(nextStatus)}>
-                {nextStatus === "受付済" ? "受付する" : "貸し出す"}
+              {nextAction && <button type="button" disabled={saving || !valid} onClick={() => save(nextAction.status)}>
+                {nextAction.label}
               </button>}
             </div>
           </section>

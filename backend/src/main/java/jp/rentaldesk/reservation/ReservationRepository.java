@@ -46,6 +46,11 @@ public class ReservationRepository {
         if (updated != 1) throw new IllegalArgumentException("指定された利用者が予約に存在しません");
     }
 
+    public void delete(long id) {
+        jdbc.sql("DELETE FROM reservation_users WHERE reservation_id = :id").param("id", id).update();
+        jdbc.sql("DELETE FROM reservations WHERE id = :id").param("id", id).update();
+    }
+
     public void updateTotal(long id, int total) {
         jdbc.sql("UPDATE reservations SET total_amount = :total WHERE id = :id")
             .param("total", total).param("id", id).update();

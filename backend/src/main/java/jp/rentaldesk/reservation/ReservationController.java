@@ -24,6 +24,12 @@ public class ReservationController {
         return service.get(id);
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable long id) {
+        service.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @PatchMapping("/{id}/status")
     public ReservationResponse updateStatus(@PathVariable long id,
         @Valid @RequestBody ReservationStatusRequest request) {
