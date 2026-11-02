@@ -35,7 +35,11 @@ OSの環境変数でも上書きできます。パスワードはコードに保
 
 | メソッド・URL | 処理 |
 | --- | --- |
+| GET /api/prices | 料金マスタ全件（ID昇順） |
+| PATCH /api/reservations/{id}/users | 利用者の品目・日数・貸出サイズメモを更新 |
 | POST /api/reservations | 予約と利用者をまとめて登録（201） |
+| GET /api/reservations/{id} | 予約詳細 |
+| PATCH /api/reservations/{id}/status | ステータス更新、更新後の予約詳細を返却 |
 | GET /api/reservations | 予約一覧（200、0件なら空配列） |
 | GET /api/reservations?keyword=ヤマダ | 名前・フリガナの部分一致検索 |
 | GET /api/reservations?rentalDate=2026-11-01 | 貸出日による絞り込み |
@@ -85,7 +89,36 @@ curl -i http://127.0.0.1:8080/api/reservations \
 
 今回は各利用者の `priceMasterId` で指定した主なレンタル品を計算します。
 `smallItems` は既存テーブルの自由記述として保存し、そこからの小物追加料金の計算は未実装です。
-削除・ステータス変更・フロントエンドも今回の範囲には含めていません。
+削除は未実装です。
+
+### 料金一覧・利用者更新
+
+`GET /api/prices` は料金マスタ全行を配列で返します（0件なら `[]`）。
+JSONのキーは既存APIと同じcamelCaseで、`id`、`division`、`category`、`item`、
+`price1day`、`price2day`、`priceAfter3rd` です。
+開発用フロントエンドからのGETもCORSで許可しています。
+
+`PATCH /api/reservations/{id}/users` の入力例：
+
+```json
+{"users":[{"id":1,"priceMasterId":3,"rentalDays":2,"lentSizeMemo":null}]}
+```
+
+指定された利用者だけを更新し、省略された利用者は保持します。
+`lentSizeMemo` はnull（または省略）でクリアできます。最大10000文字です。
+`users` は1〜20件、IDは重複不可、`rentalDays` は1〜365日です。
+料金マスタは登録時と同様に利用者の区分と一致する必要があります。
+金額はサーバー側でマスタから計算し、未更新の利用者の金額も含めて予約合計を保存します。
+利用者更新と合計更新は1トランザクションで行い、同じ予約への編集を直列化します。
+存在しない予約は404、予約に属さない利用者・不正な料金マスタ・入力値は400（ProblemDetail）です。
+成功時はGET詳細と同じ予約詳細を返します。
+
+### ステータス更新
+
+`PATCH /api/reservations/{id}/status` に `{"status":"受付済"}` のようなJSONを送ります。
+「予約済→受付済→貸出中→返却済」の1段階ずつの遷移のみ許可し、同じ状態・逆戻り・飛び越し・不正な入力は400です。
+存在しないIDは404です。エラーはProblemDetail形式、成功時はGET詳細と同じ形式で更新後の予約を返します。
+開発用フロントエンド（`http://localhost:5173`）からのCORSはGET・PATCHを許可します。
 
 ### 一覧・検索例
 
@@ -105,5 +138,5 @@ cd backend  # リポジトリのルートからの場合
 
 テスト専用のインメモリH2を使い、既存MySQL・Docker・.envには接続しません。
 プロジェクトのschemaとseedをテストリソースとして読み、MySQL固有DDLだけH2用に変換します。
-登録・一覧・検索・入力チェック・料金計算・保存失敗時のロールバックを確認します。
+登録・詳細・一覧・検索・ステータス更新・料金一覧・利用者更新・入力チェック・料金計算・保存失敗時のロールバックを確認します。
 MySQL実環境での接続と動作は、手元で起動した後に上記コマンドで確認してください。

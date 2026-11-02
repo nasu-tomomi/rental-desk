@@ -24,6 +24,18 @@ public class ReservationController {
         return service.get(id);
     }
 
+    @PatchMapping("/{id}/status")
+    public ReservationResponse updateStatus(@PathVariable long id,
+        @Valid @RequestBody ReservationStatusRequest request) {
+        return service.updateStatus(id, request.status());
+    }
+
+    @PatchMapping("/{id}/users")
+    public ReservationResponse updateUsers(@PathVariable long id,
+        @Valid @RequestBody ReservationUsersRequest request) {
+        return service.updateUsers(id, request);
+    }
+
     @GetMapping
     public List<ReservationResponse> list(
         @RequestParam(required = false) @Size(max = 100) String keyword,

@@ -22,6 +22,35 @@ public class ReservationRepository {
         this.template = template;
     }
 
+    public List<PriceResponse> findAllPrices() {
+        return jdbc.sql("SELECT * FROM price_master ORDER BY id")
+            .query((rs, n) -> new PriceResponse(rs.getLong("id"), rs.getString("division"),
+                rs.getString("category"), rs.getString("item"), rs.getInt("price_1day"),
+                rs.getInt("price_2day"), rs.getInt("price_after_3rd"))).list();
+    }
+
+    public boolean lockReservation(long id) {
+        return jdbc.sql("SELECT id FROM reservations WHERE id = :id FOR UPDATE")
+            .param("id", id).query(Long.class).optional().isPresent();
+    }
+
+    public void updateUser(long reservationId, ReservationUsersRequest.User user, int amount) {
+        int updated = jdbc.sql("""
+            UPDATE reservation_users SET price_master_id = :price, rental_days = :days,
+                lent_size_memo = :memo, amount = :amount
+            WHERE reservation_id = :reservation AND id = :id
+            """)
+            .param("price", user.priceMasterId()).param("days", user.rentalDays())
+            .param("memo", user.lentSizeMemo()).param("amount", amount)
+            .param("reservation", reservationId).param("id", user.id()).update();
+        if (updated != 1) throw new IllegalArgumentException("指定された利用者が予約に存在しません");
+    }
+
+    public void updateTotal(long id, int total) {
+        jdbc.sql("UPDATE reservations SET total_amount = :total WHERE id = :id")
+            .param("total", total).param("id", id).update();
+    }
+
     public Optional<Price> findPrice(long id) {
         return jdbc.sql("SELECT * FROM price_master WHERE id = :id").param("id", id)
             .query((rs, n) -> new Price(rs.getLong("id"), rs.getString("division"),
@@ -67,6 +96,15 @@ public class ReservationRepository {
     public Optional<ReservationResponse> find(long id) {
         return jdbc.sql("SELECT * FROM reservations WHERE id = :id").param("id", id)
             .query((rs, n) -> mapReservation(rs, users(id))).optional();
+    }
+
+    public boolean updateStatus(long id, String currentStatus, String nextStatus) {
+        return jdbc.sql("""
+            UPDATE reservations SET status = :nextStatus
+            WHERE id = :id AND status = :currentStatus
+            """)
+            .param("id", id).param("currentStatus", currentStatus).param("nextStatus", nextStatus)
+            .update() == 1;
     }
 
     public List<ReservationResponse> search(String keyword, LocalDate rentalDate) {

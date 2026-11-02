@@ -101,6 +101,69 @@ class ReservationApiTest {
             .andExpect(jsonPath("$.detail").value("指定された予約が存在しません"));
     }
 
+    @Test void advancesStatusAndReturnsGetDetail() throws Exception {
+        var created = service.create(mapper.readValue(REQUEST, ReservationRequest.class));
+        for (String next : new String[]{"受付済", "貸出中", "返却済"}) {
+            var result = mvc.perform(patch("/api/reservations/{id}/status", created.id())
+                    .contentType("application/json").content(mapper.writeValueAsString(java.util.Map.of("status", next))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value(next))
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+            var expected = mapper.readTree(mapper.writeValueAsString(created));
+            ((com.fasterxml.jackson.databind.node.ObjectNode) expected).put("status", next);
+            assertThat(mapper.readTree(result)).isEqualTo(expected);
+            mvc.perform(get("/api/reservations/{id}", created.id()))
+                .andExpect(status().isOk()).andExpect(content().json(result));
+        }
+    }
+
+    @Test void rejectsAllOtherTransitionsAndInvalidBodiesWithoutChanges() throws Exception {
+        var created = service.create(mapper.readValue(REQUEST, ReservationRequest.class));
+        String[] statuses = {"予約済", "受付済", "貸出中", "返却済"};
+        for (int i = 0; i < statuses.length; i++) {
+            jdbc.update("UPDATE reservations SET status = ? WHERE id = ?", statuses[i], created.id());
+            var before = service.get(created.id());
+            var bodies = new java.util.ArrayList<String>(java.util.List.of(
+                "{}", "{\"status\":null}", "{\"status\":\"\"}", "{\"status\":\" \"}",
+                "{\"status\":\"不明\"}", "{", "null"));
+            for (int j = 0; j < statuses.length; j++) {
+                if (j != i + 1) bodies.add(mapper.writeValueAsString(java.util.Map.of("status", statuses[j])));
+            }
+            for (String body : bodies) {
+                mvc.perform(patch("/api/reservations/{id}/status", created.id())
+                        .contentType("application/json").content(body))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                    .andExpect(jsonPath("$.status").value(400));
+                assertThat(service.get(created.id())).isEqualTo(before);
+            }
+        }
+    }
+
+    @Test void returnsProblemDetailForMissingStatusUpdateId() throws Exception {
+        mvc.perform(patch("/api/reservations/{id}/status", Long.MAX_VALUE)
+                .contentType("application/json").content("{\"status\":\"受付済\"}"))
+            .andExpect(status().isNotFound())
+            .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+            .andExpect(jsonPath("$.status").value(404))
+            .andExpect(jsonPath("$.detail").value("指定された予約が存在しません"));
+    }
+
+    @Test void rejectsConcurrentStatusChange() throws Exception {
+        var created = service.create(mapper.readValue(REQUEST, ReservationRequest.class));
+        doReturn(false).when(repository).updateStatus(created.id(), "予約済", "受付済");
+        mvc.perform(patch("/api/reservations/{id}/status", created.id())
+                .contentType("application/json").content("{\"status\":\"受付済\"}"))
+            .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400));
+        assertThat(service.get(created.id())).isEqualTo(created);
+    }
+
+    @Test void conditionalUpdateDoesNotOverwriteChangedStatus() throws Exception {
+        var created = service.create(mapper.readValue(REQUEST, ReservationRequest.class));
+        assertThat(repository.updateStatus(created.id(), "予約済", "受付済")).isTrue();
+        assertThat(repository.updateStatus(created.id(), "予約済", "受付済")).isFalse();
+        assertThat(service.get(created.id()).status()).isEqualTo("受付済");
+    }
+
     @Test void listsAndFiltersByNameKanaRomanLettersAndDate() throws Exception {
         mvc.perform(get("/api/reservations")).andExpect(status().isOk()).andExpect(content().json("[]"));
         service.create(mapper.readValue(REQUEST, ReservationRequest.class));
@@ -162,6 +225,118 @@ class ReservationApiTest {
         assertThat(price.calculate(3)).isEqualTo(10000);
         assertThat(price.calculate(5)).isEqualTo(16000);
         assertThatThrownBy(() -> price.calculate(0)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test void listsAllPricesAndSupportsEmptyMaster() throws Exception {
+        var result = mvc.perform(get("/api/prices").header("Origin", "http://localhost:5173"))
+            .andExpect(status().isOk())
+            .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"))
+            .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        var rows = mapper.readTree(result);
+        assertThat(rows.size()).isEqualTo(count("price_master"));
+        var expected = jdbc.queryForList("SELECT * FROM price_master ORDER BY id");
+        for (int i = 0; i < rows.size(); i++) {
+            var row = rows.get(i);
+            var db = expected.get(i);
+            assertThat(row.get("id").asLong()).isEqualTo(((Number) db.get("id")).longValue());
+            for (String field : new String[]{"division", "category", "item"}) {
+                assertThat(row.get(field).asText()).isEqualTo(db.get(field));
+            }
+            assertThat(row.get("price1day").asInt()).isEqualTo(db.get("price_1day"));
+            assertThat(row.get("price2day").asInt()).isEqualTo(db.get("price_2day"));
+            assertThat(row.get("priceAfter3rd").asInt()).isEqualTo(db.get("price_after_3rd"));
+        }
+        jdbc.update("DELETE FROM price_master");
+        mvc.perform(get("/api/prices")).andExpect(status().isOk()).andExpect(content().json("[]"));
+    }
+
+    private String userEdit(long userId, long priceId, int days, String memo) throws Exception {
+        return mapper.writeValueAsString(new ReservationUsersRequest.User(userId, priceId, days, memo));
+    }
+
+    @Test void updatesItemsDaysAndNullableMemoWithCalculatedTotals() throws Exception {
+        var created = service.create(mapper.readValue(REQUEST, ReservationRequest.class));
+        long alice = created.users().get(0).id(), bob = created.users().get(1).id();
+        for (int days : new int[]{1, 2, 5}) {
+            int adultAmount = days == 1 ? 6000 : 10500 + (days - 2) * 4500;
+            String body = "{\"users\":[" + userEdit(alice, 3, days, "ブーツ26cm") + ","
+                + userEdit(bob, 4, 2, null) + "]}";
+            var result = mvc.perform(patch("/api/reservations/{id}/users", created.id())
+                    .contentType("application/json").content(body)
+                    .header("Origin", "http://localhost:5173"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"))
+                .andExpect(jsonPath("$.totalAmount").value(adultAmount + 7500))
+                .andExpect(jsonPath("$.users[0].amount").value(adultAmount))
+                .andExpect(jsonPath("$.users[0].rentalDays").value(days))
+                .andExpect(jsonPath("$.users[0].priceMasterId").value(3))
+                .andExpect(jsonPath("$.users[0].priceItem").value("スキー OR スノーボード フルセット"))
+                .andExpect(jsonPath("$.users[0].lentSizeMemo").value("ブーツ26cm"))
+                .andExpect(jsonPath("$.users[1].lentSizeMemo").value(org.hamcrest.Matchers.nullValue()))
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+            mvc.perform(get("/api/reservations/{id}", created.id()))
+                .andExpect(status().isOk()).andExpect(content().json(result));
+        }
+        mvc.perform(patch("/api/reservations/{id}/users", created.id())
+                .contentType("application/json").content("{\"users\":[" + userEdit(alice, 1, 1, null) + "]}"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.totalAmount").value(11500))
+            .andExpect(jsonPath("$.users[0].lentSizeMemo").value(org.hamcrest.Matchers.nullValue()))
+            .andExpect(jsonPath("$.users[1].amount").value(7500));
+        assertThat(service.get(created.id()).users().get(0).userName()).isEqualTo("Alice");
+        assertThat(count("reservation_users")).isEqualTo(2);
+    }
+
+    @Test void rejectsInvalidUserEditsAndKeepsAllData() throws Exception {
+        var created = service.create(mapper.readValue(REQUEST, ReservationRequest.class));
+        var other = service.create(mapper.readValue(REQUEST, ReservationRequest.class));
+        long alice = created.users().get(0).id(), bob = created.users().get(1).id();
+        var bodies = new java.util.ArrayList<String>(java.util.List.of(
+            "{}", "{\"users\":null}", "{\"users\":[]}", "{\"users\":[null]}", "{\"users\":[{}]}",
+            "{\"users\":[{\"id\":" + alice + ",\"priceMasterId\":1,\"rentalDays\":null}]}"));
+        for (String invalid : new String[]{userEdit(99999, 1, 1, null),
+                userEdit(other.users().get(0).id(), 1, 1, null), userEdit(bob, 99999, 1, null),
+                userEdit(bob, 1, 1, null), userEdit(bob, 2, 0, null), userEdit(bob, 2, 366, null),
+                userEdit(bob, 0, 1, null), userEdit(bob, 2, 1, "x".repeat(10001)),
+                userEdit(alice, 1, 1, null)}) {
+            bodies.add("{\"users\":[" + userEdit(alice, 3, 2, "変更") + "," + invalid + "]}");
+        }
+        for (String body : bodies) {
+            mvc.perform(patch("/api/reservations/{id}/users", created.id())
+                    .contentType("application/json").content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+                .andExpect(jsonPath("$.status").value(400));
+            assertThat(service.get(created.id())).isEqualTo(created);
+            assertThat(service.get(other.id())).isEqualTo(other);
+        }
+        mvc.perform(patch("/api/reservations/{id}/users", Long.MAX_VALUE)
+                .contentType("application/json").content("{\"users\":[" + userEdit(alice, 1, 1, null) + "]}"))
+            .andExpect(status().isNotFound())
+            .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+            .andExpect(jsonPath("$.detail").value("指定された予約が存在しません"));
+    }
+
+    @Test void rollsBackUserEditsWhenSavingTotalFails() throws Exception {
+        var created = service.create(mapper.readValue(REQUEST, ReservationRequest.class));
+        var request = new ReservationUsersRequest(java.util.List.of(
+            new ReservationUsersRequest.User(created.users().get(0).id(), 3L, 2, "変更"),
+            new ReservationUsersRequest.User(created.users().get(1).id(), 4L, 2, null)));
+        doThrow(new IllegalStateException("simulated total save failure"))
+            .when(repository).updateTotal(anyLong(), anyInt());
+        assertThatThrownBy(() -> service.updateUsers(created.id(), request)).isInstanceOf(IllegalStateException.class);
+        assertThat(service.get(created.id())).isEqualTo(created);
+    }
+
+    @Test void rejectsAmountAndTotalOverflowWithoutSaving() throws Exception {
+        var created = service.create(mapper.readValue(REQUEST, ReservationRequest.class));
+        for (int days : new int[]{1, 3}) {
+            jdbc.update("UPDATE price_master SET price_1day = ?, price_2day = ?, price_after_3rd = ? WHERE id = 1",
+                Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE);
+            mvc.perform(patch("/api/reservations/{id}/users", created.id())
+                    .contentType("application/json").content("{\"users\":[" + userEdit(created.users().get(0).id(), 1, days, null) + "]}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400));
+            assertThat(service.get(created.id())).isEqualTo(created);
+        }
     }
 
     private int count(String table) {
