@@ -161,7 +161,7 @@ export default function App() {
               reservations.map((reservation) => (
                 <tr
                   key={reservation.id}
-                  className="reservation-row"
+                  className={`reservation-row${reservation.status === "キャンセル" ? " reservation-row-cancelled" : ""}`}
                   onClick={() => setSelectedId(reservation.id)}
                 >
                   <td className="number">{display(reservation.id)}</td>
@@ -181,11 +181,8 @@ export default function App() {
                         setSelectedId(reservation.id);
                       }}
                     >
-                      {display(reservation.applicantName)}
+                      {`${display(reservation.applicantName)}（${display(reservation.applicantKana)}）`}
                     </button>
-                    <span className="kana">
-                      {display(reservation.applicantKana)}
-                    </span>
                   </td>
                   <td>{display(reservation.mobilePhone)}</td>
                   <td className="number">
@@ -197,7 +194,7 @@ export default function App() {
                     {money(reservation.totalAmount)}
                   </td>
                   <td>{display(reservation.paymentMethod)}</td>
-                  <td>{display(reservation.status)}</td>
+                  <td><span className={reservation.status === "キャンセル" ? "status-cancelled" : undefined}>{display(reservation.status)}</span></td>
                 </tr>
               ))
             )}

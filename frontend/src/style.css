@@ -354,3 +354,26 @@ button.reservation-link:hover {
 .reservation-detail .detail-actions button.danger:hover:not(:disabled) {
   background: #82201c;
 }
+.reservation-detail .detail-actions button.cancel {
+  border-color: #88600b;
+  background: #fff4d6;
+  color: #6b4b08;
+}
+.reservation-detail .detail-actions button.cancel:hover:not(:disabled) {
+  background: #ffe7a3;
+}
+.status-cancelled {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  border: 1px solid #88600b;
+  background: #fff4d6;
+  color: #6b4b08;
+}
+.reservation-row.reservation-row-cancelled {
+  background: #fffaed;
+}
+.reservation-row.reservation-row-cancelled:hover,
+.reservation-row.reservation-row-cancelled:focus-within {
+  background: #fff4d6;
+}

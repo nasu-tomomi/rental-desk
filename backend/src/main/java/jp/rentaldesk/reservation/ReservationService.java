@@ -56,7 +56,9 @@ public class ReservationService {
             case "貸出中" -> "返却済";
             default -> null;
         };
-        if (next == null || !next.equals(status)) {
+        boolean canCancel = "キャンセル".equals(status)
+            && ("予約済".equals(current.status()) || "受付済".equals(current.status()));
+        if (!canCancel && (next == null || !next.equals(status))) {
             throw new IllegalArgumentException("指定されたステータスへの変更はできません");
         }
         if (!repository.updateStatus(id, current.status(), status)) {

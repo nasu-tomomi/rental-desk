@@ -3,6 +3,8 @@ package jp.rentaldesk;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jp.rentaldesk.reservation.*;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -148,6 +150,51 @@ class ReservationApiTest {
             mvc.perform(get("/api/reservations/{id}", created.id()))
                 .andExpect(status().isOk()).andExpect(content().json(result));
         }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"予約済", "受付済"})
+    void cancelsReservationBeforeRental(String currentStatus) throws Exception {
+        var created = service.create(mapper.readValue(REQUEST, ReservationRequest.class));
+        jdbc.update("UPDATE reservations SET status = ? WHERE id = ?", currentStatus, created.id());
+        mvc.perform(patch("/api/reservations/{id}/status", created.id())
+                .contentType("application/json").content("{\"status\":\"キャンセル\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("キャンセル"))
+            .andExpect(jsonPath("$.users.length()").value(2));
+        assertThat(service.get(created.id()).status()).isEqualTo("キャンセル");
+        mvc.perform(get("/api/reservations"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].id").value(created.id()))
+            .andExpect(jsonPath("$[0].status").value("キャンセル"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"貸出中", "返却済"})
+    void rejectsCancellationAfterRental(String currentStatus) throws Exception {
+        var created = service.create(mapper.readValue(REQUEST, ReservationRequest.class));
+        jdbc.update("UPDATE reservations SET status = ? WHERE id = ?", currentStatus, created.id());
+        var before = service.get(created.id());
+        mvc.perform(patch("/api/reservations/{id}/status", created.id())
+                .contentType("application/json").content("{\"status\":\"キャンセル\"}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(content().contentTypeCompatibleWith("application/problem+json"))
+            .andExpect(jsonPath("$.status").value(400));
+        assertThat(service.get(created.id())).isEqualTo(before);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"予約済", "受付済", "貸出中", "返却済", "キャンセル"})
+    void rejectsTransitionsFromCancelled(String targetStatus) throws Exception {
+        var created = service.create(mapper.readValue(REQUEST, ReservationRequest.class));
+        jdbc.update("UPDATE reservations SET status = 'キャンセル' WHERE id = ?", created.id());
+        var before = service.get(created.id());
+        mvc.perform(patch("/api/reservations/{id}/status", created.id())
+                .contentType("application/json")
+                .content(mapper.writeValueAsString(java.util.Map.of("status", targetStatus))))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.status").value(400));
+        assertThat(service.get(created.id())).isEqualTo(before);
     }
 
     @Test void rejectsAllOtherTransitionsAndInvalidBodiesWithoutChanges() throws Exception {

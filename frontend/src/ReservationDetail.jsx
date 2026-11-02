@@ -103,6 +103,8 @@ export default function ReservationDetail({ id, onBack }) {
     "貸出中": { status: "返却済", label: "返却する" },
   };
   const nextAction = statusActions[reservation?.status];
+  const canCancel = reservation?.status === "予約済" || reservation?.status === "受付済";
+  const readOnly = reservation?.status === "キャンセル" || reservation?.status === "返却済";
 
   function editUser(userId, field, value) {
     setUsers((current) => current.map((user) => user.id === userId ? { ...user, [field]: value } : user));
@@ -111,7 +113,8 @@ export default function ReservationDetail({ id, onBack }) {
   }
 
   async function save(status = null) {
-    if (savingRef.current || !valid) return;
+    if (savingRef.current || readOnly || !valid) return;
+    if (status === "キャンセル" && !window.confirm(`予約番号：${id}をキャンセルします。よろしいですか？`)) return;
     savingRef.current = true;
     setSaving(true);
     setSaveError("");
@@ -216,7 +219,7 @@ export default function ReservationDetail({ id, onBack }) {
           <section className="detail-panel" aria-labelledby="users-heading">
             <h2 id="users-heading">利用者・料金</h2>
             <p className="estimate-note" id="estimate-note">編集中の金額は見込みです。保存時に最新の料金表で再計算して確定します。</p>
-            <fieldset className="user-editor" disabled={saving} aria-describedby="estimate-note">
+            <fieldset className="user-editor" disabled={saving || readOnly} aria-describedby="estimate-note">
             <legend className="sr-only">利用者の品目・日数・貸出サイズメモを編集</legend>
             <div className="table-scroll" role="region" aria-label="利用者一覧" tabIndex={0}>
               <table>
@@ -269,7 +272,8 @@ export default function ReservationDetail({ id, onBack }) {
             <p role="status" className={!saving && message ? "success" : undefined}>{saving ? "保存中…" : message}</p>
             <div className="actions detail-actions">
               <button type="button" className="danger" disabled={saving} onClick={deleteReservation}>予約を削除</button>
-              <button type="button" disabled={saving || !valid} onClick={() => save()}>変更を保存</button>
+              {!readOnly && <button type="button" disabled={saving || !valid} onClick={() => save()}>変更を保存</button>}
+              {canCancel && <button type="button" className="cancel" disabled={saving || !valid} onClick={() => save("キャンセル")}>キャンセルする</button>}
               {nextAction && <button type="button" disabled={saving || !valid} onClick={() => save(nextAction.status)}>
                 {nextAction.label}
               </button>}
