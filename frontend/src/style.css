@@ -54,3 +54,15 @@ button.reservation-link:hover { color: #255b88; text-decoration: underline; }
 .reservation-detail button:hover { background: #dbeafe; }
 .reservation-detail .detail-panel tbody tr { cursor: default; }
 .reservation-detail .detail-panel tbody tr:hover { background: #eff6ff; }
+
+.user-editor { min-width: 0; margin: 0; padding: 0; border: 0; }
+.user-editor select { min-height: 42px; width: 290px; max-width: 100%; padding: 8px 12px; border: 1px solid #9fadb9; border-radius: 5px; background: white; color: inherit; font: inherit; }
+.user-editor .days-input { width: 84px; }
+.user-editor input[type="text"] { width: 220px; }
+.estimate-note, .confirmed-total { color: #596b7b; font-size: 14px; }
+.confirmed-total { text-align: right; }
+.detail-actions { flex-wrap: wrap; justify-content: flex-end; }
+.reservation-detail .detail-actions button { background: white; color: #255b88; }
+.reservation-detail button:disabled { opacity: .55; cursor: wait; }
+.reservation-detail .detail-actions button:hover:not(:disabled) { background: #dbeafe; }
+.reservation-detail button:disabled:hover { background: white; }
