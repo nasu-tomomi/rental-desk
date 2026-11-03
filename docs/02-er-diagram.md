@@ -25,7 +25,7 @@
 - ski_resort, transport, accommodation
 - payment_method（ネット：来店時／PayPal、当日：現金／カード／PayPay）
 - total_amount（利用者ごとの金額の合計、自動計算）
-- status：予約済 / 受付済 / 貸出中 / 返却済
+- status：予約済 / 受付済 / 貸出中 / 返却済 / キャンセル
 - note（備考）
 - created_at
 
@@ -43,7 +43,15 @@
   - 現場の簡易表記：スタンスはレギュラー＝R、グーフィー＝G
   - 板の表記：BURTON 2027系はスキー＝S164、スノーボード＝B165、Burtonボード＝BU165（記号＋長さcm）。ハイグレードは ES＝エキスパートスキー、EB＝エキスパートスノーボード
   - 略号ルールがあるため、自由記述（テキスト）で持つ
-- amount（この利用者分の金額、自動計算）
+- amount（メイン品目の料金＋追加品目の料金の合計、自動計算）
+
+### reservation_user_items（利用者の追加品目）— 利用者に0〜複数件
+
+- id（PK）
+- reservation_user_id（FK → reservation_users.id）
+- price_master_id（FK → price_master.id、追加するレンタル品目）
+- 追加品目は料金マスタを参照し、利用者の区分・日数で料金を計算する
+- small_items は小物の候補選択・自由入力をまとめた文字列として保持する。料金計算の対象となる追加品目は、このテーブルで管理する
 
 ### price_master（料金マスタ）— 料金表CSV（docs/03-prices.csv）を投入
 
@@ -57,6 +65,8 @@
 
 - reservations 1 — N reservation_users
 - price_master 1 — N reservation_users
+- reservation_users 1 — N reservation_user_items
+- price_master 1 — N reservation_user_items
 - reservation_users.amount の合計 ＝ reservations.total_amount
 
 ## ER図（Mermaid）
@@ -65,6 +75,8 @@
 erDiagram
     reservations ||--o{ reservation_users : "1件の予約に利用者"
     price_master ||--o{ reservation_users : "料金を決める"
+    reservation_users ||--o{ reservation_user_items : "追加品目を持つ"
+    price_master ||--o{ reservation_user_items : "追加品目の料金を決める"
 
     reservations {
         bigint id PK
@@ -83,7 +95,7 @@ erDiagram
         string accommodation
         string payment_method
         int total_amount
-        string status "予約済/受付済/貸出中/返却済"
+        string status "予約済/受付済/貸出中/返却済/キャンセル"
         text note
         datetime created_at
     }
@@ -101,6 +113,11 @@ erDiagram
         string lent_size_memo "S164 R など"
         int amount
     }
+    reservation_user_items {
+        bigint id PK
+        bigint reservation_user_id FK
+        bigint price_master_id FK
+    }
     price_master {
         bigint id PK
         string category "スタンダード/BURTON 2027/ハイグレード"
@@ -112,6 +129,10 @@ erDiagram
     }
 ```
 
+利用者の金額（reservation_users.amount）＝メイン品目の料金＋追加品目の料金の合計。
+メイン品目・各追加品目とも、利用者の区分（おとな／こども）に対応する料金マスタと、利用者の日数（rental_days）で計算する。追加品目がない場合はメイン品目の料金のみとする。
+予約の合計金額（reservations.total_amount）は、各利用者の金額の合計とする。
+
 ## 受付一覧の表示項目（絞る）
 
 受付日・時間／受取店舗／申込者名（フリガナ）／電話／利用者数／主なレンタル内容／利用スキー場／合計金額／支払い方法／ステータス
@@ -120,3 +141,4 @@ erDiagram
 - ステータスを3状態から4状態に変更（予約済 → 受付済 → 貸出中 → 返却済）。理由：受付担当と引き渡し担当が分かれており、混雑時に「受付済みだが未引き渡し」の区別が必要なため
 - 合計金額を予約一覧にも表示する。理由：日数で料金が変わり、会計時にその場で確認できる必要があるため
 - 当日来店の簡易登録に貸出日・返却日を追加。理由：当日の貸出・返却の管理に必要なため
+- 2026-11-03：キャンセル状態を追加。理由：キャンセルした予約も記録として残し、後から確認できるようにするため
