@@ -13,6 +13,6 @@ public class WebConfig implements WebMvcConfigurer {
             .allowedMethods("GET");
         registry.addMapping("/api/reservations/**")
             .allowedOrigins("http://localhost:5173")
-            .allowedMethods("GET", "PATCH", "DELETE");
+            .allowedMethods("GET", "POST", "PATCH", "DELETE");
     }
 }

@@ -26,7 +26,10 @@ public class ReservationService {
             amounts.add(amount);
             total = Math.addExact(total, amount);
         }
-        long id = repository.insert(request, total);
+        int maxDays = request.users().stream().mapToInt(ReservationRequest.User::rentalDays).max().orElseThrow();
+        var returnDate = request.rentalDate().plusDays(maxDays - 1L);
+        var returnTime = request.returnDatetime() == null ? java.time.LocalTime.MIDNIGHT : request.returnDatetime().toLocalTime();
+        long id = repository.insert(request, total, returnDate.atTime(returnTime));
         for (int i = 0; i < request.users().size(); i++) {
             repository.insertUser(id, request.users().get(i), amounts.get(i));
         }

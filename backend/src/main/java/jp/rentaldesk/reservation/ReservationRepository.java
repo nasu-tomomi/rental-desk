@@ -62,13 +62,13 @@ public class ReservationRepository {
                 rs.getInt("price_1day"), rs.getInt("price_2day"), rs.getInt("price_after_3rd"))).optional();
     }
 
-    public long insert(ReservationRequest r, int total) {
+    public long insert(ReservationRequest r, int total, LocalDateTime returnDatetime) {
         var p = new MapSqlParameterSource()
             .addValue("source", r.source()).addValue("name", r.applicantName())
             .addValue("kana", r.applicantKana()).addValue("phone", r.mobilePhone())
             .addValue("contact", r.contactId()).addValue("email", r.email())
             .addValue("store", r.pickupStore()).addValue("date", r.rentalDate())
-            .addValue("time", r.pickupTime()).addValue("returnAt", r.returnDatetime())
+            .addValue("time", r.pickupTime()).addValue("returnAt", returnDatetime)
             .addValue("resort", r.skiResort()).addValue("transport", r.transport())
             .addValue("accommodation", r.accommodation()).addValue("payment", r.paymentMethod())
             .addValue("total", total).addValue("note", r.note());

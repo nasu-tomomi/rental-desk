@@ -377,3 +377,44 @@ button.reservation-link:hover {
 .reservation-row.reservation-row-cancelled:focus-within {
   background: #fff4d6;
 }
+.registration-fields {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.registration-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: 20px;
+}
+.registration-grid input,
+.registration-grid select {
+  width: 100%;
+  min-width: 0;
+}
+.registration-grid select {
+  min-height: 42px;
+  padding: 8px 12px;
+  border: 1px solid #9fadb9;
+  border-radius: 5px;
+  background: white;
+  color: inherit;
+  font: inherit;
+}
+.registration-actions {
+  margin-top: 24px;
+  flex-wrap: wrap;
+}
+.walk-in-form button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+.user-remove { margin-bottom: 20px; }
+.small-items { margin: 24px 0 0; padding: 0; border: 0; }
+.small-items legend { margin-bottom: 12px; font-weight: 600; font-size: 14px; }
+.item-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.item-chip { border-radius: 24px; padding: 8px 16px; background: white; color: #255b88; }
+.item-chip:hover { background: #edf2f6; }
+.item-chip[aria-pressed="true"] { background: #255b88; color: white; }
+.item-chip[aria-pressed="true"]:hover { background: #19466b; }

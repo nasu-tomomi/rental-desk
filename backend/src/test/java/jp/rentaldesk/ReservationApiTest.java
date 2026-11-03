@@ -76,6 +76,45 @@ class ReservationApiTest {
         assertThat(count("reservation_users")).isEqualTo(2);
     }
 
+    @Test void createsWalkInReservationFromFrontendWithCalculatedTotal() throws Exception {
+        mvc.perform(options("/api/reservations")
+                .header("Origin", "http://localhost:5173")
+                .header("Access-Control-Request-Method", "POST")
+                .header("Access-Control-Request-Headers", "content-type"))
+            .andExpect(status().isOk())
+            .andExpect(header().string("Access-Control-Allow-Methods", org.hamcrest.Matchers.containsString("POST")));
+        mvc.perform(post("/api/reservations").contentType("application/json")
+                .header("Origin", "http://localhost:5173")
+                .content(REQUEST.replace("\"net\"", "\"walk-in\"")))
+            .andExpect(status().isCreated())
+            .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"))
+            .andExpect(jsonPath("$.source").value("walk-in"))
+            .andExpect(jsonPath("$.status").value("予約済"))
+            .andExpect(jsonPath("$.users.length()").value(2))
+            .andExpect(jsonPath("$.totalAmount").value(13000));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 5})
+    void calculatesReturnDateFromLongestRentalDays(int days) throws Exception {
+        String body = REQUEST.replace("\"net\"", "\"walk-in\"")
+            .replace("\"rentalDays\":3", "\"rentalDays\":1")
+            .replace("\"rentalDays\":1,\"priceMasterId\":2", "\"rentalDays\":" + days + ",\"priceMasterId\":2")
+            .replace("\"returnDatetime\":\"2026-11-03T17:00:00\",", "");
+        var expected = java.time.LocalDate.of(2026, 11, 1).plusDays(days - 1).atStartOfDay();
+        var result = mvc.perform(post("/api/reservations").contentType("application/json").content(body))
+            .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        long id = mapper.readTree(result).get("id").asLong();
+        assertThat(service.get(id).returnDatetime()).isEqualTo(expected);
+        assertThat(jdbc.queryForObject("SELECT return_datetime FROM reservations WHERE id = ?",
+            java.time.LocalDateTime.class, id)).isEqualTo(expected);
+    }
+
+    @Test void calculatedReturnDateOverridesSuppliedDateAndKeepsTime() throws Exception {
+        var created = service.create(mapper.readValue(REQUEST.replace("2026-11-03T17:00:00", "2026-11-10T17:00:00"), ReservationRequest.class));
+        assertThat(created.returnDatetime()).isEqualTo(java.time.LocalDateTime.of(2026, 11, 3, 17, 0));
+    }
+
     @Test void getsReservationWithUsersAndPriceDetails() throws Exception {
         var created = service.create(mapper.readValue(REQUEST, ReservationRequest.class));
         mvc.perform(get("/api/reservations/{id}", created.id()))

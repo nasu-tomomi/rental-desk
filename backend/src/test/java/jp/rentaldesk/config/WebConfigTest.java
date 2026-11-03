@@ -44,7 +44,7 @@ class WebConfigTest {
                 .header("Access-Control-Request-Headers", "content-type"))
             .andExpect(status().isOk())
             .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"))
-            .andExpect(header().string("Access-Control-Allow-Methods", "GET,PATCH,DELETE"))
+            .andExpect(header().string("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE"))
             .andExpect(header().string("Access-Control-Allow-Headers", "content-type"));
         mvc.perform(patch("/api/reservations/3/status")
                 .header("Origin", "http://localhost:5173")
@@ -55,13 +55,13 @@ class WebConfigTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"/api/reservations", "/api/reservations/3", "/api/reservations/3/status"})
-    void allowsGetPreflightButRejectsPost(String path) throws Exception {
+    void allowsGetPreflightButRejectsPut(String path) throws Exception {
         mvc.perform(options(path).header("Origin", "http://localhost:5173")
                 .header("Access-Control-Request-Method", "GET"))
             .andExpect(status().isOk())
-            .andExpect(header().string("Access-Control-Allow-Methods", "GET,PATCH,DELETE"));
+            .andExpect(header().string("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE"));
         mvc.perform(options(path).header("Origin", "http://localhost:5173")
-                .header("Access-Control-Request-Method", "POST"))
+                .header("Access-Control-Request-Method", "PUT"))
             .andExpect(status().isForbidden());
     }
 }

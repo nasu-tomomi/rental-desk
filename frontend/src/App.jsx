@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import ReservationDetail from "./ReservationDetail.jsx";
+import WalkInForm from "./WalkInForm.jsx";
 
 const API_URL = "http://localhost:8080/api/reservations";
 const yen = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 0 });
@@ -8,6 +9,7 @@ const money = (value) => (value == null ? "-" : `¥${yen.format(value)}`);
 
 export default function App() {
   const [selectedId, setSelectedId] = useState(null);
+  const [creating, setCreating] = useState(false);
   const [keyword, setKeyword] = useState("");
   const [rentalDate, setRentalDate] = useState("");
   const [reservations, setReservations] = useState([]);
@@ -47,11 +49,11 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (selectedId !== null) return;
+    if (selectedId !== null || creating) return;
     const criteria = searchCriteria.current;
     loadReservations(criteria.keyword, criteria.rentalDate);
     return () => activeRequest.current?.abort();
-  }, [selectedId]);
+  }, [selectedId, creating]);
 
   function search(event) {
     event.preventDefault();
@@ -62,6 +64,13 @@ export default function App() {
     setKeyword("");
     setRentalDate("");
     loadReservations();
+  }
+
+  if (creating) {
+    return <WalkInForm onBack={() => setCreating(false)} onCreated={(reservation) => {
+      setSelectedId(reservation.id);
+      setCreating(false);
+    }} />;
   }
 
   if (selectedId !== null) {
@@ -78,6 +87,7 @@ export default function App() {
       <header>
         <p className="app-name">Rental Desk</p>
         <h1>予約一覧</h1>
+        <button type="button" onClick={() => setCreating(true)}>当日受付</button>
       </header>
       <form onSubmit={search} className="search-form" aria-label="予約検索">
         <label htmlFor="keyword">

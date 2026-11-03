@@ -226,7 +226,7 @@ export default function ReservationDetail({ id, onBack }) {
                 <caption className="sr-only">利用者ごとの品目と料金</caption>
                 <thead>
                   <tr>
-                    {["名前", "区分", "日数", "品目", "経験", "身長", "靴サイズ", "小物", "貸出サイズメモ", "金額"].map((label) => (
+                    {["名前", "区分", "日数", "品目", "経験", "身長 (cm)", "靴サイズ (cm)", "小物", "貸出サイズメモ", "金額"].map((label) => (
                       <th key={label} scope="col">{label}</th>
                     ))}
                   </tr>
