@@ -40,6 +40,11 @@ public record ReservationRequest(
         @Size(max = 20) String shoeSize,
         @NotNull @Positive Long priceMasterId,
         @Size(max = 10000) String smallItems,
-        @Size(max = 10000) String lentSizeMemo
-    ) {}
+        @Size(max = 10000) String lentSizeMemo,
+        List<@NotNull @Positive Long> additionalPriceMasterIds
+    ) {
+        public User {
+            additionalPriceMasterIds = additionalPriceMasterIds == null ? List.of() : additionalPriceMasterIds;
+        }
+    }
 }

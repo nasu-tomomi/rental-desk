@@ -11,6 +11,11 @@ public record ReservationUsersRequest(
         @NotNull @Positive Long id,
         @NotNull @Positive Long priceMasterId,
         @NotNull @Min(1) @Max(365) Integer rentalDays,
-        @Size(max = 10000) String lentSizeMemo
-    ) {}
+        @Size(max = 10000) String lentSizeMemo,
+        List<@NotNull @Positive Long> additionalPriceMasterIds
+    ) {
+        public User(Long id, Long priceMasterId, Integer rentalDays, String lentSizeMemo) {
+            this(id, priceMasterId, rentalDays, lentSizeMemo, null);
+        }
+    }
 }

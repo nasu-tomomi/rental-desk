@@ -10,6 +10,9 @@ public class UserAmountCalculator {
     public UserAmountCalculator(ReservationRepository repository) { this.repository = repository; }
 
     public int calculate(long mainPriceId, String division, int days, List<Long> additionalPriceIds) {
+        if (new java.util.HashSet<>(additionalPriceIds).size() != additionalPriceIds.size()) {
+            throw new IllegalArgumentException("追加品目IDが重複しています");
+        }
         int amount = itemAmount(mainPriceId, division, days);
         for (long priceId : additionalPriceIds) {
             amount = Math.addExact(amount, itemAmount(priceId, division, days));

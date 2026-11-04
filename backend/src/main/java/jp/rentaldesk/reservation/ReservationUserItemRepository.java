@@ -17,6 +17,25 @@ public class ReservationUserItemRepository {
                 rs.getLong("reservation_user_id"), rs.getLong("price_master_id"))).list();
     }
 
+    public java.util.Map<Long, List<ReservationResponse.AdditionalItem>> findDetailsByReservations(List<Long> ids) {
+        var grouped = new java.util.HashMap<Long, List<ReservationResponse.AdditionalItem>>();
+        if (ids.isEmpty()) return grouped;
+        jdbc.sql("""
+            SELECT i.reservation_user_id, p.*, u.rental_days
+            FROM reservation_user_items i
+            JOIN reservation_users u ON u.id = i.reservation_user_id
+            JOIN price_master p ON p.id = i.price_master_id
+            WHERE u.reservation_id IN (:ids) ORDER BY i.id
+            """).param("ids", ids).query((rs, n) -> {
+                var price = new Price(rs.getLong("id"), rs.getString("division"), rs.getInt("price_1day"),
+                    rs.getInt("price_2day"), rs.getInt("price_after_3rd"));
+                return java.util.Map.entry(rs.getLong("reservation_user_id"),
+                    new ReservationResponse.AdditionalItem(price.id(), rs.getString("category"),
+                        rs.getString("item"), price.calculate(rs.getInt("rental_days"))));
+            }).list().forEach(e -> grouped.computeIfAbsent(e.getKey(), k -> new java.util.ArrayList<>()).add(e.getValue()));
+        return grouped;
+    }
+
     @Transactional
     public void replace(long userId, List<Long> priceIds) {
         jdbc.sql("DELETE FROM reservation_user_items WHERE reservation_user_id = :id").param("id", userId).update();

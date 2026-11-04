@@ -93,12 +93,14 @@ public class ReservationRepository {
             .addValue("height", u.height()).addValue("shoe", u.shoeSize())
             .addValue("price", u.priceMasterId()).addValue("small", u.smallItems())
             .addValue("memo", u.lentSizeMemo()).addValue("amount", amount);
+        var key = new GeneratedKeyHolder();
         template.update("""
             INSERT INTO reservation_users (reservation_id, user_name, division, rental_days,
                 experience, height, shoe_size, price_master_id, small_items, lent_size_memo, amount)
             VALUES (:reservation, :name, :division, :days, :experience, :height, :shoe,
                 :price, :small, :memo, :amount)
-            """, p);
+            """, p, key, new String[]{"id"});
+        items.replace(Objects.requireNonNull(key.getKey()).longValue(), u.additionalPriceMasterIds());
     }
 
     public Optional<ReservationResponse> find(long id) {
@@ -133,13 +135,14 @@ public class ReservationRepository {
         var rows = jdbc.sql(sql).params(params).query((rs, n) -> mapReservation(rs, List.of())).list();
         if (rows.isEmpty()) return rows;
         var grouped = new HashMap<Long, List<ReservationResponse.User>>();
+        var additional = items.findDetailsByReservations(rows.stream().map(ReservationResponse::id).toList());
         jdbc.sql("""
             SELECT u.*, p.category AS price_category, p.item AS price_item
             FROM reservation_users u LEFT JOIN price_master p ON p.id = u.price_master_id
             WHERE u.reservation_id IN (:ids) ORDER BY u.id
             """)
             .param("ids", rows.stream().map(ReservationResponse::id).toList())
-            .query((rs, n) -> Map.entry(rs.getLong("reservation_id"), mapUser(rs)))
+            .query((rs, n) -> Map.entry(rs.getLong("reservation_id"), mapUser(rs, additional)))
             .list().forEach(e -> grouped.computeIfAbsent(e.getKey(), k -> new ArrayList<>()).add(e.getValue()));
         return rows.stream().map(r -> new ReservationResponse(r.id(), r.source(), r.applicantName(),
             r.applicantKana(), r.mobilePhone(), r.contactId(), r.email(), r.pickupStore(), r.rentalDate(),
@@ -149,20 +152,23 @@ public class ReservationRepository {
     }
 
     private List<ReservationResponse.User> users(long id) {
+        var additional = items.findDetailsByReservations(List.of(id));
         return jdbc.sql("""
             SELECT u.*, p.category AS price_category, p.item AS price_item
             FROM reservation_users u LEFT JOIN price_master p ON p.id = u.price_master_id
             WHERE u.reservation_id = :id ORDER BY u.id
             """)
-            .param("id", id).query((rs, n) -> mapUser(rs)).list();
+            .param("id", id).query((rs, n) -> mapUser(rs, additional)).list();
     }
 
-    private ReservationResponse.User mapUser(ResultSet rs) throws SQLException {
+    private ReservationResponse.User mapUser(ResultSet rs,
+            Map<Long, List<ReservationResponse.AdditionalItem>> additional) throws SQLException {
         return new ReservationResponse.User(rs.getLong("id"), rs.getString("user_name"),
             rs.getString("division"), rs.getObject("rental_days", Integer.class), rs.getString("experience"),
             rs.getString("height"), rs.getString("shoe_size"), rs.getObject("price_master_id", Long.class),
             rs.getString("price_category"), rs.getString("price_item"),
-            rs.getString("small_items"), rs.getString("lent_size_memo"), rs.getObject("amount", Integer.class));
+            rs.getString("small_items"), rs.getString("lent_size_memo"), rs.getObject("amount", Integer.class),
+            additional.getOrDefault(rs.getLong("id"), List.of()));
     }
 
     private ReservationResponse mapReservation(ResultSet rs, List<ReservationResponse.User> users) throws SQLException {

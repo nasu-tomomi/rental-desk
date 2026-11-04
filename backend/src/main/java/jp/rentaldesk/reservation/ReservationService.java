@@ -25,7 +25,7 @@ public class ReservationService {
         var amounts = new ArrayList<Integer>();
         int total = 0;
         for (var user : request.users()) {
-            int amount = calculator.calculate(user.priceMasterId(), user.division(), user.rentalDays(), List.of());
+            int amount = calculator.calculate(user.priceMasterId(), user.division(), user.rentalDays(), user.additionalPriceMasterIds());
             amounts.add(amount);
             total = Math.addExact(total, amount);
         }
@@ -87,8 +87,9 @@ public class ReservationService {
             }
             var existing = current.users().stream().filter(u -> u.id() == user.id()).findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("指定された利用者が予約に存在しません"));
-            var additionalPriceIds = userItems.findByUser(user.id()).stream()
-                .map(ReservationUserItem::priceMasterId).toList();
+            var additionalPriceIds = user.additionalPriceMasterIds() == null
+                ? userItems.findByUser(user.id()).stream().map(ReservationUserItem::priceMasterId).toList()
+                : user.additionalPriceMasterIds();
             amounts.put(user.id(), calculator.calculate(user.priceMasterId(), existing.division(),
                 user.rentalDays(), additionalPriceIds));
         }
@@ -98,6 +99,9 @@ public class ReservationService {
         }
         for (var user : request.users()) {
             repository.updateUser(id, user, amounts.get(user.id()));
+            if (user.additionalPriceMasterIds() != null) {
+                userItems.replace(user.id(), user.additionalPriceMasterIds());
+            }
         }
         repository.updateTotal(id, total);
         return get(id);

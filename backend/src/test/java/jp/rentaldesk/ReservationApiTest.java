@@ -549,6 +549,108 @@ class ReservationApiTest {
         assertThat(userItems.findByUser(created.users().get(0).id())).isEmpty();
     }
 
+    private String additionalItemsRequest() {
+        return REQUEST.replace("\"source\":\"net\"", "\"source\":\"walk-in\"")
+            .replace("\"priceMasterId\":1", "\"priceMasterId\":1,\"additionalPriceMasterIds\":[23,25],\"smallItems\":\"グローブ／ゴーグル／自由メモ\"")
+            .replace("\"priceMasterId\":2", "\"priceMasterId\":2,\"additionalPriceMasterIds\":[24]");
+    }
+
+    @Test void registersAdditionalItemsAndReturnsBreakdownInDetailAndList() throws Exception {
+        var result = mvc.perform(post("/api/reservations").contentType("application/json").content(additionalItemsRequest()))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.totalAmount").value(17500))
+            .andExpect(jsonPath("$.users[0].amount").value(14000))
+            .andExpect(jsonPath("$.users[1].amount").value(3500))
+            .andExpect(jsonPath("$.users[0].smallItems").value("グローブ／ゴーグル／自由メモ"))
+            .andExpect(jsonPath("$.users[0].additionalItems.length()").value(2))
+            .andExpect(jsonPath("$.users[0].additionalItems[0].priceMasterId").value(23))
+            .andExpect(jsonPath("$.users[0].additionalItems[0].item").value("グローブ"))
+            .andExpect(jsonPath("$.users[0].additionalItems[0].amount").value(2000))
+            .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        long id = mapper.readTree(result).get("id").asLong();
+        assertThat(count("reservation_user_items")).isEqualTo(3);
+        mvc.perform(get("/api/reservations/{id}", id)).andExpect(status().isOk())
+            .andExpect(jsonPath("$.users[0].additionalItems[1].item").value("ゴーグル"))
+            .andExpect(jsonPath("$.users[0].additionalItems[1].amount").value(2000))
+            .andExpect(jsonPath("$.users[1].additionalItems[0].amount").value(500));
+        mvc.perform(get("/api/reservations")).andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].users[0].additionalItems.length()").value(2));
+        mvc.perform(delete("/api/reservations/{id}", id)).andExpect(status().isNoContent());
+        assertThat(count("reservation_user_items")).isZero();
+    }
+
+    @Test void updatesAdditionalItemsRecalculatesAndSupportsOmissionAndClearing() throws Exception {
+        var created = service.create(mapper.readValue(additionalItemsRequest(), ReservationRequest.class));
+        long userId = created.users().get(0).id();
+        String body = "{\"users\":[{\"id\":" + userId
+            + ",\"priceMasterId\":1,\"rentalDays\":2,\"additionalPriceMasterIds\":[29]}]}";
+        mvc.perform(patch("/api/reservations/{id}/users", created.id()).contentType("application/json").content(body))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.totalAmount").value(11300))
+            .andExpect(jsonPath("$.users[0].amount").value(7800))
+            .andExpect(jsonPath("$.users[0].additionalItems.length()").value(1))
+            .andExpect(jsonPath("$.users[0].additionalItems[0].item").value("スキーストック"))
+            .andExpect(jsonPath("$.users[0].additionalItems[0].amount").value(800));
+        String omitted = "{\"users\":[{\"id\":" + userId + ",\"priceMasterId\":1,\"rentalDays\":3}]}";
+        mvc.perform(patch("/api/reservations/{id}/users", created.id()).contentType("application/json").content(omitted))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.totalAmount").value(14600))
+            .andExpect(jsonPath("$.users[0].additionalItems[0].amount").value(1100));
+        mvc.perform(patch("/api/reservations/{id}/users", created.id()).contentType("application/json")
+                .content(body.replace("[29]", "[]")))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.totalAmount").value(10500))
+            .andExpect(jsonPath("$.users[0].additionalItems").isEmpty());
+        assertThat(userItems.findByUser(userId)).isEmpty();
+        assertThat(service.get(created.id()).users().get(1).additionalItems()).hasSize(1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"[999999]", "[24]", "[23,23]", "[null]", "[0]", "[-1]"})
+    void rejectsInvalidAdditionalItemArraysOnCreateAndUpdate(String ids) throws Exception {
+        mvc.perform(post("/api/reservations").contentType("application/json")
+                .content(additionalItemsRequest().replace("[23,25]", ids)))
+            .andExpect(status().isBadRequest());
+        assertThat(count("reservations")).isZero();
+        assertThat(count("reservation_users")).isZero();
+        assertThat(count("reservation_user_items")).isZero();
+        var created = service.create(mapper.readValue(additionalItemsRequest(), ReservationRequest.class));
+        String before = mapper.writeValueAsString(service.get(created.id()));
+        var first = created.users().get(0);
+        var second = created.users().get(1);
+        String body = "{\"users\":[{\"id\":" + second.id()
+            + ",\"priceMasterId\":2,\"rentalDays\":2,\"additionalPriceMasterIds\":[]},{\"id\":" + first.id()
+            + ",\"priceMasterId\":1,\"rentalDays\":2,\"additionalPriceMasterIds\":" + ids + "}]}";
+        mvc.perform(patch("/api/reservations/{id}/users", created.id()).contentType("application/json").content(body))
+            .andExpect(status().isBadRequest());
+        assertThat(mapper.writeValueAsString(service.get(created.id()))).isEqualTo(before);
+        assertThat(count("reservation_user_items")).isEqualTo(3);
+    }
+
+    @Test void rollsBackAdditionalItemsWhenLaterUserSaveFails() throws Exception {
+        doAnswer(invocation -> {
+            if (invocation.getArgument(1, ReservationRequest.User.class).userName().equals("Bob"))
+                throw new IllegalStateException("simulated second user failure");
+            return invocation.callRealMethod();
+        }).when(repository).insertUser(anyLong(), any(), anyInt());
+        var request = mapper.readValue(additionalItemsRequest(), ReservationRequest.class);
+        assertThatThrownBy(() -> service.create(request)).isInstanceOf(IllegalStateException.class);
+        assertThat(count("reservations")).isZero();
+        assertThat(count("reservation_users")).isZero();
+        assertThat(count("reservation_user_items")).isZero();
+    }
+
+    @Test void rollsBackAdditionalItemChangesWhenTotalSaveFails() throws Exception {
+        var created = service.create(mapper.readValue(additionalItemsRequest(), ReservationRequest.class));
+        String before = mapper.writeValueAsString(service.get(created.id()));
+        doThrow(new IllegalStateException("simulated total save failure"))
+            .when(repository).updateTotal(eq(created.id()), anyInt());
+        var request = new ReservationUsersRequest(java.util.List.of(new ReservationUsersRequest.User(
+            created.users().get(0).id(), 1L, 2, "変更", java.util.List.of(29L))));
+        assertThatThrownBy(() -> service.updateUsers(created.id(), request)).isInstanceOf(IllegalStateException.class);
+        assertThat(mapper.writeValueAsString(service.get(created.id()))).isEqualTo(before);
+        assertThat(count("reservation_user_items")).isEqualTo(3);
+    }
+
     private int count(String table) {
         return jdbc.queryForObject("SELECT COUNT(*) FROM " + table, Integer.class);
     }

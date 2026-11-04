@@ -90,8 +90,7 @@ curl -i http://127.0.0.1:8080/api/reservations \
 各利用者の金額は、メイン品目と `reservation_user_items` の追加品目の料金の合計です。
 どの品目も利用者の区分・利用日数で計算し、区分の不一致は400です。
 `smallItems` は表示・メモ用の文字列として保存し、料金計算には使いません。
-追加品目を指定する登録・変更APIは後続Phaseで実装します。
-現段階の登録はメイン品目のみで、利用者更新は保存済み追加品目も含めて再計算します。
+追加品目は各利用者の `additionalPriceMasterIds` で指定します（下記参照）。
 予約削除時は追加品目、利用者、予約の順に、1つのトランザクションで削除します。
 
 ### 料金一覧・利用者更新
@@ -152,4 +151,60 @@ MySQL実環境での接続と動作は、手元で起動した後に上記コマ
 
 `reservation_user_items` は `id`（PK）、`reservation_user_id`（利用者FK）、
 `price_master_id`（料金マスタFK）を持ちます。Spring JDBC の record と Repository で扱います。
-予約削除時は追加品目も削除します。料金計算はPhase 3で実装済みです。追加品目を指定するAPIは後続Phaseで実装します。
+予約削除時は追加品目も削除します。料金計算はPhase 3で実装済みです。追加品目を指定するAPIはPhase 4で実装済みです。
+
+## 追加品目API（Phase 4）
+
+POST `/api/reservations` の各利用者に `additionalPriceMasterIds` を指定できます。
+IDは GET `/api/prices` から取得し、利用者の区分に一致する行を選びます。
+省略またはnullなら追加品目なし、空配列も追加品目なしです。
+
+```json
+{
+  "source": "walk-in",
+  "applicantName": "Alice",
+  "rentalDate": "2026-11-04",
+  "users": [{
+    "userName": "Alice",
+    "division": "おとな",
+    "rentalDays": 3,
+    "priceMasterId": 1,
+    "additionalPriceMasterIds": [23, 25],
+    "smallItems": "グローブ／ゴーグル／自由メモ"
+  }]
+}
+```
+
+上記IDは初期seedを空のDBに投入した場合の例です。
+メイン10,000円＋グローブ2,000円＋ゴーグル2,000円＝14,000円（税込）になります。
+`smallItems` は送信された文字列をそのまま保存します。
+当日受付フォームではチップ名と自由入力をこの文字列にまとめ、チップのIDを配列にも送ります（フロント対応はPhase 5）。
+文字列からの料金計算や、既存メモから追加品目への自動変換は行いません。
+
+GET `/api/reservations/{id}`、POST・PATCHの成功レスポンスでは、
+各利用者に `additionalItems` を返します。追加品目なしなら `[]` です。
+既存の `priceItem` はメイン品目、`amount` は追加品目を含めた利用者合計です。
+
+```json
+{
+  "priceItem": "スキー OR スノーボード セット",
+  "amount": 14000,
+  "additionalItems": [
+    {"priceMasterId": 23, "category": "スタンダード", "item": "グローブ", "amount": 2000},
+    {"priceMasterId": 25, "category": "スタンダード", "item": "ゴーグル", "amount": 2000}
+  ]
+}
+```
+
+PATCH `/api/reservations/{id}/users` は追加品目の配列で指定利用者の選択を置き換えます。
+配列を省略またはnullにすると既存選択を保持し、`[]` で全解除します。
+既存どおり、リクエストから省略された利用者は保持されます。
+
+```json
+{"users":[{"id":1,"priceMasterId":1,"rentalDays":2,"lentSizeMemo":null,"additionalPriceMasterIds":[29]}]}
+```
+
+追加品目も利用者と同じ日数で再計算し、利用者金額と予約合計を保存します。
+`smallItems` のメモはPATCHでは変更しません。料金用の選択は `additionalItems` で確認します。
+存在しないID・区分不一致・重複ID・null要素・0以下のIDは400です。
+保存は予約単位のトランザクションで、途中失敗時は追加品目・利用者金額・予約合計も取り消します。
