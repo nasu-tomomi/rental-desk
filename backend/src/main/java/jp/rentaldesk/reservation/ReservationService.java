@@ -10,19 +10,22 @@ import java.util.NoSuchElementException;
 @Service
 public class ReservationService {
     private final ReservationRepository repository;
-    public ReservationService(ReservationRepository repository) { this.repository = repository; }
+    private final ReservationUserItemRepository userItems;
+    private final UserAmountCalculator calculator;
+
+    public ReservationService(ReservationRepository repository, ReservationUserItemRepository userItems,
+                              UserAmountCalculator calculator) {
+        this.repository = repository;
+        this.userItems = userItems;
+        this.calculator = calculator;
+    }
 
     @Transactional
     public ReservationResponse create(ReservationRequest request) {
         var amounts = new ArrayList<Integer>();
         int total = 0;
         for (var user : request.users()) {
-            var price = repository.findPrice(user.priceMasterId())
-                .orElseThrow(() -> new IllegalArgumentException("指定された料金マスタが存在しません"));
-            if (!price.division().equals(user.division())) {
-                throw new IllegalArgumentException("利用者の区分と料金マスタの区分が一致しません");
-            }
-            int amount = price.calculate(user.rentalDays());
+            int amount = calculator.calculate(user.priceMasterId(), user.division(), user.rentalDays(), List.of());
             amounts.add(amount);
             total = Math.addExact(total, amount);
         }
@@ -84,12 +87,10 @@ public class ReservationService {
             }
             var existing = current.users().stream().filter(u -> u.id() == user.id()).findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("指定された利用者が予約に存在しません"));
-            var price = repository.findPrice(user.priceMasterId())
-                .orElseThrow(() -> new IllegalArgumentException("指定された料金マスタが存在しません"));
-            if (!price.division().equals(existing.division())) {
-                throw new IllegalArgumentException("利用者の区分と料金マスタの区分が一致しません");
-            }
-            amounts.put(user.id(), price.calculate(user.rentalDays()));
+            var additionalPriceIds = userItems.findByUser(user.id()).stream()
+                .map(ReservationUserItem::priceMasterId).toList();
+            amounts.put(user.id(), calculator.calculate(user.priceMasterId(), existing.division(),
+                user.rentalDays(), additionalPriceIds));
         }
         int total = 0;
         for (var user : current.users()) {

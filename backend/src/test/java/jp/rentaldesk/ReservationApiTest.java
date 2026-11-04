@@ -32,6 +32,7 @@ class ReservationApiTest {
     @Autowired ObjectMapper mapper;
     @Autowired ReservationService service;
     @Autowired ReservationUserItemRepository userItems;
+    @Autowired UserAmountCalculator calculator;
     @MockitoSpyBean ReservationRepository repository;
 
     private static final String REQUEST = """
@@ -501,6 +502,51 @@ class ReservationApiTest {
         assertThat(count("reservation_user_items")).isEqualTo(1);
         assertThat(userItems.findByUser(retained.users().get(0).id()))
             .extracting(ReservationUserItem::priceMasterId).containsExactly(27L);
+    }
+
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "おとな,1,23,25,1,6000", "おとな,1,23,25,2,10000", "おとな,1,23,25,4,18000",
+        "こども,2,24,26,1,4000", "こども,2,24,26,2,6600", "こども,2,24,26,4,11800"
+    })
+    void calculatesMainAndMultipleAdditionalItems(String division, long main, long first, long second,
+                                                  int days, int expected) {
+        assertThat(calculator.calculate(main, division, days, java.util.List.of(first, second))).isEqualTo(expected);
+    }
+
+    @Test void rejectsInvalidAdditionalPricesAndOverflow() {
+        assertThatThrownBy(() -> calculator.calculate(1L, "おとな", 1, java.util.List.of(24L)))
+            .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("区分");
+        assertThatThrownBy(() -> calculator.calculate(1L, "おとな", 1, java.util.List.of(999999L)))
+            .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("存在しません");
+        jdbc.update("UPDATE price_master SET price_1day = 2147483647 WHERE id = 23");
+        assertThatThrownBy(() -> calculator.calculate(1L, "おとな", 1, java.util.List.of(23L)))
+            .isInstanceOf(ArithmeticException.class);
+    }
+
+    @Test void recalculatesStoredAdditionalItemsUsingUsersDaysAndKeepsOtherUsersAmounts() throws Exception {
+        var created = service.create(mapper.readValue(REQUEST, ReservationRequest.class));
+        long userId = created.users().get(0).id();
+        userItems.replace(userId, java.util.List.of(23L, 25L));
+        var request = new ReservationUsersRequest(java.util.List.of(
+            new ReservationUsersRequest.User(userId, 1L, 4, null)));
+        var updated = service.updateUsers(created.id(), request);
+        assertThat(updated.users().get(0).amount()).isEqualTo(18000);
+        assertThat(updated.users().get(1).amount()).isEqualTo(3000);
+        assertThat(updated.totalAmount()).isEqualTo(21000);
+        assertThat(jdbc.queryForObject("SELECT amount FROM reservation_users WHERE id = ?", Integer.class, userId))
+            .isEqualTo(18000);
+        assertThat(service.get(created.id()).totalAmount()).isEqualTo(21000);
+        assertThat(userItems.findByUser(userId)).hasSize(2);
+    }
+
+    @Test void smallItemsTextDoesNotAddCharges() throws Exception {
+        var request = mapper.readValue(REQUEST.replace("\"priceMasterId\":1",
+            "\"priceMasterId\":1,\"smallItems\":\"グローブ／ゴーグル／自由メモ\""), ReservationRequest.class);
+        var created = service.create(request);
+        assertThat(created.users().get(0).amount()).isEqualTo(10000);
+        assertThat(created.totalAmount()).isEqualTo(13000);
+        assertThat(userItems.findByUser(created.users().get(0).id())).isEmpty();
     }
 
     private int count(String table) {
