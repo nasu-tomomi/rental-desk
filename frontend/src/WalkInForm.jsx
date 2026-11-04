@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
+import { additionalItemNames } from "./rentalItems";
 
 function today() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
-const smallItemOptions = ["ゴーグル", "ヘルメット", "グローブ", "ニットキャップ", "長靴", "ストック"];
+const smallItemOptions = ["ゴーグル", "ヘルメット", "グローブ", "ニットキャップ", "長靴", "スキーストック"];
 const newUser = () => ({ key: crypto.randomUUID(), userName: "", priceMasterId: "", rentalDays: 1, height: "", shoeSize: "", experience: "", smallItems: "", selectedItems: [] });
 
 export default function WalkInForm({ onBack, onCreated }) {
@@ -65,6 +66,12 @@ export default function WalkInForm({ onBack, onCreated }) {
           ...applicant, applicantName: applicant.applicantName.trim(), mobilePhone: applicant.mobilePhone.trim(), source: "walk-in",
           users: users.map(({ key, selectedItems, ...user }) => ({
             ...user, userName: user.userName.trim(), priceMasterId: Number(user.priceMasterId),
+            additionalPriceMasterIds: selectedItems.map((item) => {
+              const division = prices.find((price) => price.id === Number(user.priceMasterId))?.division;
+              const price = prices.find((price) => price.category === "スタンダード" && price.item === item && price.division === division);
+              if (!price) throw new Error(`${item}の料金が見つかりません。品目と料金表を確認してください。`);
+              return price.id;
+            }),
             smallItems: [...selectedItems, user.smallItems.trim()].filter(Boolean).join("／"),
             rentalDays: Number(user.rentalDays),
             division: prices.find((price) => price.id === Number(user.priceMasterId))?.division,
@@ -111,7 +118,7 @@ export default function WalkInForm({ onBack, onCreated }) {
                 <label>名前（必須）<input required maxLength={100} value={user.userName} onChange={(event) => editUser(index, "userName", event.target.value)} /></label>
                 <label>品目（必須）<select required disabled={loading || !!priceError} value={user.priceMasterId} onChange={(event) => editUser(index, "priceMasterId", event.target.value)}>
                   <option value="">{loading ? "料金表を読み込み中…" : "品目を選択してください"}</option>
-                  {prices.map((price) => <option key={price.id} value={price.id}>{price.division} / {price.category} / {price.item}</option>)}
+                  {prices.filter((price) => !additionalItemNames.includes(price.item)).map((price) => <option key={price.id} value={price.id}>{price.division} / {price.category} / {price.item}</option>)}
                 </select></label>
                 <label>日数（必須）<input type="number" required min={1} max={365} step={1} value={user.rentalDays} onChange={(event) => editUser(index, "rentalDays", event.target.value)} /></label>
                 {[["height", "身長 (cm)", 20], ["shoeSize", "靴サイズ (cm)", 20]].map(([field, label, maxLength]) => (
@@ -123,12 +130,13 @@ export default function WalkInForm({ onBack, onCreated }) {
                 </select></label>
               </div>
               <fieldset className="small-items">
-                <legend>小物（複数選択可）</legend>
+                <legend>小物の追加レンタル（複数選択可・有料）</legend>
                 <div className="item-chips">
-                  {smallItemOptions.map((item) => <button key={item} type="button" className="item-chip" aria-pressed={user.selectedItems.includes(item)}
+                  {smallItemOptions.map((item) => <button key={item} type="button" className="item-chip" disabled={loading || !!priceError || !user.priceMasterId} aria-pressed={user.selectedItems.includes(item)}
                     onClick={() => editUser(index, "selectedItems", user.selectedItems.includes(item) ? user.selectedItems.filter((value) => value !== item) : [...user.selectedItems, item])}>{item}</button>)}
                 </div>
-                <label>小物（自由入力）<input maxLength={9900} value={user.smallItems} onChange={(event) => editUser(index, "smallItems", event.target.value)} /></label>
+                <p className="estimate-note">小物の料金は利用者の区分・日数で計算されます。自由入力はメモとして保存します。</p>
+                <label>小物（自由入力・料金には含まれません）<input maxLength={9900} value={user.smallItems} onChange={(event) => editUser(index, "smallItems", event.target.value)} /></label>
               </fieldset>
             </section>
           ))}

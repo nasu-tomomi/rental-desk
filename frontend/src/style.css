@@ -418,3 +418,21 @@ button.reservation-link:hover {
 .item-chip:hover { background: #edf2f6; }
 .item-chip[aria-pressed="true"] { background: #255b88; color: white; }
 .item-chip[aria-pressed="true"]:hover { background: #19466b; }
+
+.user-breakdown { margin-top: 24px; padding-top: 20px; border-top: 1px solid #d5dde5; }
+.user-breakdown h3 { margin: 0 0 16px; font-size: 17px; }
+.price-breakdown { margin: 0; max-width: 760px; }
+.price-breakdown > div { display: flex; justify-content: space-between; gap: 20px; padding: 8px 0; }
+.price-breakdown dt { overflow-wrap: anywhere; }
+.price-breakdown dd { margin: 0; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.breakdown-total { border-top: 1px solid #d5dde5; font-weight: 700; }
+.additional-options { border: 0; padding: 0; margin: 20px 0 0; min-width: 0; }
+.additional-options legend { font-weight: 600; margin-bottom: 12px; }
+.additional-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 8px; margin: 12px 0; }
+.additional-choice { display: flex; flex-direction: row; align-items: flex-start; gap: 10px; padding: 10px; border: 1px solid #d5dde5; border-radius: 6px; }
+.additional-choice input[type="checkbox"] { width: 18px; height: 18px; min-width: 18px; min-height: 18px; margin: 2px 0 0; }
+.additional-choice small { display: block; margin-top: 4px; color: #596b7b; }
+.additional-options summary { cursor: pointer; padding: 8px 0; }
+@media (max-width: 480px) {
+  .price-breakdown > div { flex-direction: column; gap: 4px; }
+}
