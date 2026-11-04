@@ -15,9 +15,11 @@ import java.util.*;
 @Repository
 public class ReservationRepository {
     private final JdbcClient jdbc;
+    private final ReservationUserItemRepository items;
     private final NamedParameterJdbcTemplate template;
 
-    public ReservationRepository(JdbcClient jdbc, NamedParameterJdbcTemplate template) {
+    public ReservationRepository(JdbcClient jdbc, NamedParameterJdbcTemplate template, ReservationUserItemRepository items) {
+        this.items = items;
         this.jdbc = jdbc;
         this.template = template;
     }
@@ -47,6 +49,7 @@ public class ReservationRepository {
     }
 
     public void delete(long id) {
+        items.deleteByReservation(id);
         jdbc.sql("DELETE FROM reservation_users WHERE reservation_id = :id").param("id", id).update();
         jdbc.sql("DELETE FROM reservations WHERE id = :id").param("id", id).update();
     }

@@ -31,6 +31,7 @@ class ReservationApiTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired ObjectMapper mapper;
     @Autowired ReservationService service;
+    @Autowired ReservationUserItemRepository userItems;
     @MockitoSpyBean ReservationRepository repository;
 
     private static final String REQUEST = """
@@ -457,6 +458,49 @@ class ReservationApiTest {
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400));
             assertThat(service.get(created.id())).isEqualTo(created);
         }
+    }
+
+    @Test void savesReadsAndReplacesAdditionalItems() throws Exception {
+        var created = service.create(mapper.readValue(REQUEST, ReservationRequest.class));
+        long userId = created.users().get(0).id();
+        assertThat(userItems.findByUser(userId)).isEmpty();
+        userItems.replace(userId, java.util.List.of(23L, 25L));
+        var items = userItems.findByUser(userId);
+        assertThat(items).extracting(ReservationUserItem::priceMasterId).containsExactly(23L, 25L);
+        assertThat(items).allSatisfy(item -> {
+            assertThat(item.id()).isPositive();
+            assertThat(item.reservationUserId()).isEqualTo(userId);
+        });
+        userItems.replace(userId, java.util.List.of(27L));
+        assertThat(userItems.findByUser(userId)).extracting(ReservationUserItem::priceMasterId).containsExactly(27L);
+        userItems.replace(userId, java.util.List.of());
+        assertThat(userItems.findByUser(userId)).isEmpty();
+    }
+
+    @Test void enforcesAdditionalItemForeignKeysAndRollsBackFailedReplacement() throws Exception {
+        var created = service.create(mapper.readValue(REQUEST, ReservationRequest.class));
+        long userId = created.users().get(0).id();
+        userItems.replace(userId, java.util.List.of(23L));
+        assertThatThrownBy(() -> userItems.replace(userId, java.util.List.of(25L, 999999L)))
+            .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        assertThat(userItems.findByUser(userId)).extracting(ReservationUserItem::priceMasterId).containsExactly(23L);
+        assertThatThrownBy(() -> userItems.replace(999999L, java.util.List.of(23L)))
+            .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    }
+
+    @Test void deletesAdditionalItemsWithReservationAndPreservesOtherReservations() throws Exception {
+        var request = mapper.readValue(REQUEST, ReservationRequest.class);
+        var deleted = service.create(request);
+        var retained = service.create(request);
+        for (var user : deleted.users()) userItems.replace(user.id(), java.util.List.of(23L, 25L));
+        userItems.replace(retained.users().get(0).id(), java.util.List.of(27L));
+        mvc.perform(delete("/api/reservations/{id}", deleted.id())).andExpect(status().isNoContent());
+        for (var user : deleted.users()) assertThat(userItems.findByUser(user.id())).isEmpty();
+        assertThat(count("reservations")).isEqualTo(1);
+        assertThat(count("reservation_users")).isEqualTo(2);
+        assertThat(count("reservation_user_items")).isEqualTo(1);
+        assertThat(userItems.findByUser(retained.users().get(0).id()))
+            .extracting(ReservationUserItem::priceMasterId).containsExactly(27L);
     }
 
     private int count(String table) {

@@ -89,7 +89,7 @@ curl -i http://127.0.0.1:8080/api/reservations \
 
 今回は各利用者の `priceMasterId` で指定した主なレンタル品を計算します。
 `smallItems` は既存テーブルの自由記述として保存し、そこからの小物追加料金の計算は未実装です。
-削除は未実装です。
+予約削除時は追加品目、利用者、予約の順に、1つのトランザクションで削除します。
 
 ### 料金一覧・利用者更新
 
@@ -140,3 +140,13 @@ cd backend  # リポジトリのルートからの場合
 プロジェクトのschemaとseedをテストリソースとして読み、MySQL固有DDLだけH2用に変換します。
 登録・詳細・一覧・検索・ステータス更新・料金一覧・利用者更新・入力チェック・料金計算・保存失敗時のロールバックを確認します。
 MySQL実環境での接続と動作は、手元で起動した後に上記コマンドで確認してください。
+
+## 追加品目テーブル（Phase 2）
+
+新規DBは `sql/01-schema.sql` に `reservation_user_items` を含みます。
+既存DBには `sql/04-create-reservation-user-items.sql` を手動実行してください。
+既存の予約・利用者データは保持され、同SQLは再実行できます。
+
+`reservation_user_items` は `id`（PK）、`reservation_user_id`（利用者FK）、
+`price_master_id`（料金マスタFK）を持ちます。Spring JDBC の record と Repository で扱います。
+予約削除時は追加品目も削除します。料金計算・APIとの接続は後続Phaseで実装します。
