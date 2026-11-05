@@ -23,8 +23,14 @@ public record ReservationRequest(
     @Size(max = 100) String accommodation,
     @Size(max = 20) String paymentMethod,
     @Size(max = 10000) String note,
+    @Size(max = 10000) String staffMemo,
     @NotEmpty @Size(max = 20) List<@NotNull @Valid User> users
 ) {
+    @AssertTrue(message = "当日受付ではLINE・WhatsApp IDを入力してください")
+    public boolean isWalkInContactValid() {
+        return !"walk-in".equals(source) || (contactId != null && !contactId.isBlank());
+    }
+
     @AssertTrue(message = "返却日時は貸出日時以降にしてください")
     public boolean isReturnDatetimeValid() {
         return rentalDate == null || returnDatetime == null ||

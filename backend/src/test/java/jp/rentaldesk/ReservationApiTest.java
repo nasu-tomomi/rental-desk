@@ -38,6 +38,7 @@ class ReservationApiTest {
 
     private static final String REQUEST = """
         {"source":"net","applicantName":"山田 Alice","applicantKana":"ヤマダ",
+         "contactId":"demo-contact",
          "rentalDate":"2026-11-01","pickupTime":"09:00:00",
          "returnDatetime":"2026-11-03T17:00:00",
          "users":[
@@ -748,6 +749,51 @@ class ReservationApiTest {
         service.create(mapper.readValue(REQUEST.replace("山田 Alice", "Alice12"), ReservationRequest.class));
         mvc.perform(get("/api/reservations").param("keyword", "Alice1"))
             .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"<missing>", "<null>", "", "   "})
+    void rejectsWalkInWithoutContactId(String contact) throws Exception {
+        var input = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(REQUEST);
+        input.put("source", "walk-in");
+        if (contact.equals("<missing>")) input.remove("contactId");
+        else if (contact.equals("<null>")) input.putNull("contactId");
+        else input.put("contactId", contact);
+        mvc.perform(post("/api/reservations").contentType("application/json").content(mapper.writeValueAsString(input)))
+            .andExpect(status().isBadRequest());
+        assertThat(count("reservations")).isZero();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void registersWalkInWithoutKanaAndSavesStaffMemo(boolean omitKana) throws Exception {
+        var input = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(REQUEST);
+        input.put("source", "walk-in");
+        if (omitKana) input.remove("applicantKana"); else input.put("applicantKana", "");
+        input.put("staffMemo", "グローブ追加、料金徴収済み\n受付時の記録");
+        input.put("note", "申込備考とは別");
+        var result = mvc.perform(post("/api/reservations").contentType("application/json").content(mapper.writeValueAsString(input)))
+            .andExpect(status().isCreated()).andExpect(jsonPath("$.contactId").value("demo-contact"))
+            .andExpect(jsonPath("$.staffMemo").value("グローブ追加、料金徴収済み\n受付時の記録"))
+            .andExpect(jsonPath("$.note").value("申込備考とは別")).andReturn();
+        long id = mapper.readTree(result.getResponse().getContentAsString(StandardCharsets.UTF_8)).get("id").asLong();
+        mvc.perform(get("/api/reservations/{id}", id)).andExpect(status().isOk())
+            .andExpect(jsonPath("$.staffMemo").value("グローブ追加、料金徴収済み\n受付時の記録"));
+    }
+
+    @Test void keepsContactIdOptionalForNetReservations() throws Exception {
+        var input = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(REQUEST);
+        input.remove("contactId");
+        mvc.perform(post("/api/reservations").contentType("application/json").content(mapper.writeValueAsString(input)))
+            .andExpect(status().isCreated());
+    }
+
+    @Test void rejectsOverlongStaffMemoOnRegistration() throws Exception {
+        var input = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(REQUEST);
+        input.put("staffMemo", "あ".repeat(10001));
+        mvc.perform(post("/api/reservations").contentType("application/json").content(mapper.writeValueAsString(input)))
+            .andExpect(status().isBadRequest());
+        assertThat(count("reservations")).isZero();
     }
 
     private int count(String table) {

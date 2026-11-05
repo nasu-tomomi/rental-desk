@@ -79,14 +79,14 @@ public class ReservationRepository {
             .addValue("time", r.pickupTime()).addValue("returnAt", returnDatetime)
             .addValue("resort", r.skiResort()).addValue("transport", r.transport())
             .addValue("accommodation", r.accommodation()).addValue("payment", r.paymentMethod())
-            .addValue("total", total).addValue("note", r.note());
+            .addValue("total", total).addValue("note", r.note()).addValue("staffMemo", r.staffMemo());
         var key = new GeneratedKeyHolder();
         template.update("""
             INSERT INTO reservations (source, applicant_name, applicant_kana, mobile_phone,
                 contact_id, email, pickup_store, rental_date, pickup_time, return_datetime,
-                ski_resort, transport, accommodation, payment_method, total_amount, note, status)
+                ski_resort, transport, accommodation, payment_method, total_amount, note, staff_memo, status)
             VALUES (:source, :name, :kana, :phone, :contact, :email, :store, :date, :time,
-                :returnAt, :resort, :transport, :accommodation, :payment, :total, :note, '予約済')
+                :returnAt, :resort, :transport, :accommodation, :payment, :total, :note, :staffMemo, '予約済')
             """, p, key, new String[]{"id"});
         return Objects.requireNonNull(key.getKey()).longValue();
     }

@@ -8,10 +8,10 @@ function today() {
 }
 
 const smallItemOptions = ["ゴーグル", "ヘルメット", "グローブ", "ニットキャップ", "長靴", "スキーストック"];
-const newUser = () => ({ key: crypto.randomUUID(), userName: "", priceMasterId: "", rentalDays: 1, height: "", shoeSize: "", experience: "", smallItems: "", selectedItems: [] });
+const newUser = () => ({ key: crypto.randomUUID(), userName: "", priceMasterId: "", rentalDays: 1, height: "", shoeSize: "", experience: "", selectedItems: [] });
 
 export default function WalkInForm({ onBack, onCreated }) {
-  const [applicant, setApplicant] = useState({ applicantName: "", applicantKana: "", mobilePhone: "", contactId: "", rentalDate: today() });
+  const [applicant, setApplicant] = useState({ applicantName: "", applicantKana: "", mobilePhone: "", contactId: "", staffMemo: "", rentalDate: today() });
   const [users, setUsers] = useState(() => [newUser()]);
   const [prices, setPrices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -50,8 +50,8 @@ export default function WalkInForm({ onBack, onCreated }) {
   async function submit(event) {
     event.preventDefault();
     if (savingRef.current || loading || priceError) return;
-    if (!applicant.applicantName.trim() || !applicant.mobilePhone.trim() || users.some((user) => !user.userName.trim())) {
-      setError("申込者名・携帯電話・利用者名を入力してください。");
+    if (!applicant.applicantName.trim() || !applicant.mobilePhone.trim() || !applicant.contactId.trim() || users.some((user) => !user.userName.trim())) {
+      setError("申込者名・携帯電話・LINE・WhatsApp ID・利用者名を入力してください。");
       return;
     }
     savingRef.current = true;
@@ -64,7 +64,7 @@ export default function WalkInForm({ onBack, onCreated }) {
         method: "POST", signal: controller.signal,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...applicant, applicantName: applicant.applicantName.trim(), mobilePhone: applicant.mobilePhone.trim(), source: "walk-in",
+          ...applicant, applicantName: applicant.applicantName.trim(), mobilePhone: applicant.mobilePhone.trim(), contactId: applicant.contactId.trim(), source: "walk-in",
           users: users.map(({ key, selectedItems, ...user }) => ({
             ...user, userName: user.userName.trim(), priceMasterId: Number(user.priceMasterId),
             additionalPriceMasterIds: selectedItems.map((item) => {
@@ -73,7 +73,7 @@ export default function WalkInForm({ onBack, onCreated }) {
               if (!price) throw new Error(`${item}の料金が見つかりません。品目と料金表を確認してください。`);
               return price.id;
             }),
-            smallItems: [...selectedItems, user.smallItems.trim()].filter(Boolean).join("／"),
+            smallItems: selectedItems.join("／"),
             rentalDays: Number(user.rentalDays),
             division: prices.find((price) => price.id === Number(user.priceMasterId))?.division,
           })),
@@ -103,11 +103,15 @@ export default function WalkInForm({ onBack, onCreated }) {
           <section className="detail-panel">
             <h2>申込者</h2>
             <div className="registration-grid">
-              {[["applicantName", "名前（必須）", "text", 100, true], ["applicantKana", "フリガナ", "text", 100, false], ["mobilePhone", "携帯電話（必須）", "tel", 30, true], ["contactId", "LINE・WhatsApp ID", "text", 100, false], ["rentalDate", "貸出日（必須）", "date", undefined, true]].map(([field, label, type, maxLength, required]) => (
+              {[["applicantName", "名前（必須）", "text", 100, true], ["applicantKana", "フリガナ", "text", 100, false], ["mobilePhone", "携帯電話（必須）", "tel", 30, true], ["contactId", "LINE・WhatsApp ID（必須）", "text", 100, true], ["rentalDate", "貸出日（必須）", "date", undefined, true]].map(([field, label, type, maxLength, required]) => (
                 <label key={field}>{label}<input type={type} required={required} maxLength={maxLength} value={applicant[field]}
                   onChange={(event) => { setApplicant((current) => ({ ...current, [field]: event.target.value })); setError(""); }} /></label>
               ))}
             </div>
+            <label className="staff-memo" htmlFor="registration-staff-memo">スタッフメモ
+              <textarea id="registration-staff-memo" rows={4} maxLength={10000} value={applicant.staffMemo}
+                onChange={(event) => { setApplicant((current) => ({ ...current, staffMemo: event.target.value })); setError(""); }} />
+            </label>
           </section>
           {users.map((user, index) => (
             <section className="detail-panel" key={user.key} aria-labelledby={`user-${index}`}>
@@ -130,13 +134,11 @@ export default function WalkInForm({ onBack, onCreated }) {
                 </select></label>
               </div>
               <fieldset className="small-items">
-                <legend>小物の追加レンタル（複数選択可・有料）</legend>
+                <legend>小物の追加レンタル（複数選択可）</legend>
                 <div className="item-chips">
                   {smallItemOptions.map((item) => <button key={item} type="button" className="item-chip" disabled={loading || !!priceError || !user.priceMasterId} aria-pressed={user.selectedItems.includes(item)}
                     onClick={() => editUser(index, "selectedItems", user.selectedItems.includes(item) ? user.selectedItems.filter((value) => value !== item) : [...user.selectedItems, item])}>{item}</button>)}
                 </div>
-                <p className="estimate-note">小物の料金は利用者の区分・日数で計算されます。自由入力はメモとして保存します。</p>
-                <label>小物（自由入力・料金には含まれません）<input maxLength={9900} value={user.smallItems} onChange={(event) => editUser(index, "smallItems", event.target.value)} /></label>
               </fieldset>
             </section>
           ))}
