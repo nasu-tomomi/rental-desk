@@ -3,13 +3,14 @@ import { apiFetch } from "./api";
 import ReservationDetail from "./ReservationDetail.jsx";
 import WalkInForm from "./WalkInForm.jsx";
 import LoginForm from "./LoginForm.jsx";
+import StaffHeader from "./StaffHeader.jsx";
 
 const API_URL = "http://localhost:8080/api/reservations";
 const yen = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 0 });
 const display = (value) => (value == null || value === "" ? "-" : value);
 const money = (value) => (value == null ? "-" : `¥${yen.format(value)}`);
 
-function Reservations({ username, onLogout, loggingOut, logoutError }) {
+function Reservations({ loggingOut }) {
   const [selectedId, setSelectedId] = useState(null);
   const [creating, setCreating] = useState(false);
   const [keyword, setKeyword] = useState("");
@@ -87,16 +88,10 @@ function Reservations({ username, onLogout, loggingOut, logoutError }) {
   return (
     <main>
       <header>
-        <p className="app-name">Rental Desk</p>
         <h1>予約一覧</h1>
-        <div className="staff-actions">
+        <div className="walk-in-action">
           <button type="button" onClick={() => setCreating(true)} disabled={loggingOut}>当日受付</button>
-          <span>ログイン中：{username}</span>
-          <button type="button" className="secondary" onClick={onLogout} disabled={loggingOut}>
-            {loggingOut ? "ログアウト中…" : "ログアウト"}
-          </button>
         </div>
-        {logoutError && <p className="error" role="alert">{logoutError}</p>}
       </header>
       <form onSubmit={search} className="search-form" aria-label="予約検索">
         <label htmlFor="keyword">
@@ -279,5 +274,8 @@ export default function App() {
     setLogoutError("");
     setSession({ status: "authenticated", username });
   }} />;
-  return <Reservations username={session.username} onLogout={logout} loggingOut={loggingOut} logoutError={logoutError} />;
+  return <>
+    <StaffHeader username={session.username} onLogout={logout} loggingOut={loggingOut} logoutError={logoutError} />
+    <Reservations loggingOut={loggingOut} />
+  </>;
 }

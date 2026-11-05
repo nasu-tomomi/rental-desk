@@ -200,7 +200,6 @@ export default function ReservationDetail({ id, onBack }) {
   return (
     <main className="reservation-detail">
       <header>
-        <p className="app-name">Rental Desk</p>
         <h1 ref={heading} tabIndex={-1}>予約詳細</h1>
         {reservation && <p>予約番号：{reservation.id}</p>}
         <button type="button" className="secondary" onClick={onBack} disabled={saving}>一覧へ戻る</button>

@@ -93,7 +93,6 @@ export default function WalkInForm({ onBack, onCreated }) {
   return (
     <main className="walk-in-form">
       <header>
-        <p className="app-name">Rental Desk</p>
         <h1 ref={heading} tabIndex={-1}>当日受付</h1>
         <button type="button" className="secondary" onClick={onBack} disabled={saving}>一覧へ戻る</button>
       </header>

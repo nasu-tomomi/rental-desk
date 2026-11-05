@@ -26,6 +26,7 @@ main {
   color: #596b7b;
 }
 h1 {
+  scroll-margin-top: 90px;
   margin: 0 0 24px;
   font-size: 26px;
 }
@@ -445,7 +446,18 @@ button.reservation-link:hover {
 .password-field { display: flex; gap: 8px; margin-bottom: 24px; }
 .password-field input { flex: 1; }
 .password-field button { flex-shrink: 0; }
-.staff-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.staff-header { position: sticky; top: 0; z-index: 10; background: white; border-bottom: 1px solid #d5dde5; }
+.staff-header-inner { max-width: 1440px; margin: 0 auto; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.staff-header-brand { font-size: 18px; font-weight: 700; color: #255b88; flex-shrink: 0; }
+.staff-header-account { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px 12px; font-size: 14px; }
+.staff-header-account > span { overflow-wrap: anywhere; }
+.staff-header-account button { min-height: 32px; padding: 5px 12px; font-size: 13px; flex-shrink: 0; }
+.staff-header-error { max-width: 1392px; margin: 0 auto 12px; padding: 0 24px; }
+.walk-in-action { margin-bottom: 24px; }
+@media (max-width: 480px) {
+  .staff-header-inner { padding: 12px 16px; gap: 12px; }
+  .staff-header-account { font-size: 12px; }
+}
 
 .staff-memo { margin-top: 24px; }
 .staff-memo textarea { width: 100%; min-width: 0; padding: 10px 12px; resize: vertical; border: 1px solid #9fadb9; border-radius: 5px; font: inherit; color: inherit; }
