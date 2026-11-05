@@ -326,6 +326,7 @@ export default function ReservationDetail({ id, onBack }) {
             </label>
             </fieldset>
             <p className="detail-total" aria-live="polite">合計 <strong>{money(displayedTotal)}</strong></p>
+            <p className="confirmed-total" aria-live="polite">保存済みの合計：{money(reservation.totalAmount)}</p>
             {!valid && users.length > 0 && <p className="error">品目と日数（1〜365の整数）を確認してください。金額は上限2,147,483,647円以内で入力してください。</p>}
             {saveError && <p className="error" role="alert">{saveError}</p>}
             <p role="status" className={!saving && message ? "success" : undefined}>{saving ? "保存中…" : message}</p>
