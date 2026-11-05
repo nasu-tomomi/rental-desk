@@ -208,3 +208,22 @@ PATCH `/api/reservations/{id}/users` は追加品目の配列で指定利用者�
 `smallItems` のメモはPATCHでは変更しません。料金用の選択は `additionalItems` で確認します。
 存在しないID・区分不一致・重複ID・null要素・0以下のIDは400です。
 保存は予約単位のトランザクションで、途中失敗時は追加品目・利用者金額・予約合計も取り消します。
+
+## スタッフログイン
+
+既存DBには `sql/05-create-staff.sql`、`sql/06-seed-staff.sql` の順に手動実行してください。
+新規DBは `sql/01-schema.sql`、料金seed、`sql/06-seed-staff.sql` を実行します。
+初期アカウントは演習専用の `staff` / `password1234` です。DBのpassword列にはBCryptハッシュだけを保存します。
+seedは再実行可能で、既存スタッフのパスワードを上書きしません。
+
+- `POST /api/auth/login`：`{"username":"staff","password":"password1234"}`。成功200で `{"username":"staff"}`、認証失敗401。
+- `GET /api/auth/me`：認証中は200でユーザー名、未認証は401のJSON。
+- `POST /api/auth/logout`：認証中のみ利用可能。セッション破棄・Cookie削除で200。
+- ログイン以外の `/api/**` はセッション認証必須。リダイレクトやHTTP Basic認証は使いません。
+- フロントは `http://localhost:5173` に限定してCORSのcredentialsを許可します。
+  Cookieが同じホストに送られるよう、ブラウザは `localhost` を使ってください。
+- API向けの演習仕様に従いCSRFは無効化しています（SecurityConfigにもコメントを記載）。
+  セッションはHttpOnly・SameSite=LaxのCookieで管理し、ログイン時にセッションIDを更新します。
+
+認証テストはH2上で実際のschema・BCrypt seedを使用します。
+既存の予約テストは `@WithMockUser` で認証済みとして実行し、認証専用テストで未認証・ログイン・ログアウト・CORSを検証します。

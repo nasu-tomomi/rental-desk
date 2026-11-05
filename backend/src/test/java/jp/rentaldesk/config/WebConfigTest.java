@@ -15,10 +15,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(ReservationController.class)
-@Import(WebConfig.class)
+@Import({WebConfig.class, SecurityConfig.class})
+@org.springframework.security.test.context.support.WithMockUser(username = "staff", roles = "STAFF")
 class WebConfigTest {
     @Autowired MockMvc mvc;
     @MockitoBean ReservationService service;
+    @MockitoBean jp.rentaldesk.auth.StaffUserDetailsService staffUsers;
 
     @ParameterizedTest
     @ValueSource(strings = {"/api/reservations", "/api/reservations/3"})

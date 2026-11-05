@@ -1,4 +1,4 @@
--- 作成済みDBから取得した4テーブルの定義。
+-- 作成済みDBから取得した5テーブルの定義。
 SET NAMES utf8mb4;
 
 CREATE TABLE `price_master` (
@@ -64,4 +64,12 @@ CREATE TABLE IF NOT EXISTS `reservation_user_items` (
   KEY `reservation_user_items_price_idx` (`price_master_id`),
   CONSTRAINT `reservation_user_items_user_fk` FOREIGN KEY (`reservation_user_id`) REFERENCES `reservation_users` (`id`),
   CONSTRAINT `reservation_user_items_price_fk` FOREIGN KEY (`price_master_id`) REFERENCES `price_master` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `staff` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `username` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `password` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (`id`),
+  CONSTRAINT `staff_username_unique` UNIQUE (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
