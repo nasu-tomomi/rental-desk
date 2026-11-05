@@ -126,10 +126,18 @@ public class ReservationRepository {
         String sql = "SELECT * FROM reservations WHERE 1=1";
         var params = new HashMap<String, Object>();
         if (keyword != null && !keyword.isBlank()) {
-            // Treat %, _ and the escape character as literal search input.
-            String escaped = keyword.strip().replace("!", "!!").replace("%", "!%").replace("_", "!_");
-            sql += " AND (applicant_name LIKE :keyword ESCAPE '!' OR applicant_kana LIKE :keyword ESCAPE '!')";
-            params.put("keyword", "%" + escaped + "%");
+            String input = keyword.strip();
+            if (input.matches("[0-9]+")) {
+                var id = new java.math.BigInteger(input);
+                if (id.bitLength() > 63) return List.of();
+                sql += " AND id = :reservationId";
+                params.put("reservationId", id.longValue());
+            } else {
+                // Treat %, _ and the escape character as literal search input.
+                String escaped = input.replace("!", "!!").replace("%", "!%").replace("_", "!_");
+                sql += " AND (applicant_name LIKE :keyword ESCAPE '!' OR applicant_kana LIKE :keyword ESCAPE '!')";
+                params.put("keyword", "%" + escaped + "%");
+            }
         }
         if (rentalDate != null) {
             sql += " AND rental_date = :date";

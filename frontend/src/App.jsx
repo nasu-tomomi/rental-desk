@@ -95,13 +95,13 @@ function Reservations({ loggingOut }) {
       </header>
       <form onSubmit={search} className="search-form" aria-label="予約検索">
         <label htmlFor="keyword">
-          検索語（氏名・フリガナ）
+          氏名・フリガナ・予約番号
           <input
             id="keyword"
             type="search"
             value={keyword}
             maxLength={100}
-            placeholder="例：山田・ヤマダ・Alice"
+            placeholder="例：山田・ヤマダ・12"
             onChange={(event) => setKeyword(event.target.value)}
           />
         </label>

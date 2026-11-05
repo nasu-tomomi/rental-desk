@@ -722,6 +722,34 @@ class ReservationApiTest {
         assertThat(mapper.writeValueAsString(service.get(created.id()))).isEqualTo(before);
     }
 
+    @Test void searchesNumericKeywordByExactReservationIdWithOptionalDate() throws Exception {
+        var created = service.create(mapper.readValue(REQUEST, ReservationRequest.class));
+        service.create(mapper.readValue(REQUEST.replace("山田 Alice", Long.toString(created.id())), ReservationRequest.class));
+        for (String keyword : new String[]{Long.toString(created.id()), "00" + created.id(), " " + created.id() + " "}) {
+            mvc.perform(get("/api/reservations").param("keyword", keyword))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(created.id()));
+        }
+        mvc.perform(get("/api/reservations").param("keyword", Long.toString(created.id())).param("rentalDate", "2026-11-01"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1));
+        mvc.perform(get("/api/reservations").param("keyword", Long.toString(created.id())).param("rentalDate", "2026-11-02"))
+            .andExpect(status().isOk()).andExpect(content().json("[]"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"999999", "9999999999999999999999999999999999999999"})
+    void returnsEmptyForMissingOrOutOfRangeNumericId(String keyword) throws Exception {
+        service.create(mapper.readValue(REQUEST, ReservationRequest.class));
+        mvc.perform(get("/api/reservations").param("keyword", keyword))
+            .andExpect(status().isOk()).andExpect(content().json("[]"));
+    }
+
+    @Test void searchesMixedAlphanumericKeywordByName() throws Exception {
+        service.create(mapper.readValue(REQUEST.replace("山田 Alice", "Alice12"), ReservationRequest.class));
+        mvc.perform(get("/api/reservations").param("keyword", "Alice1"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1));
+    }
+
     private int count(String table) {
         return jdbc.queryForObject("SELECT COUNT(*) FROM " + table, Integer.class);
     }
