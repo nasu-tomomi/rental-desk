@@ -61,6 +61,13 @@
 - division：おとな / こども
 - price_1day, price_2day, price_after_3rd（3日目以降・1日ごと）
 
+### staff（スタッフ認証）
+
+- id（PK）
+- username（ユニーク）
+- password（BCryptハッシュ。平文は保存しない）
+- 他のテーブルとはリレーションなし。スタッフログインはセッションCookie方式で管理する
+
 ## リレーション
 
 - reservations 1 — N reservation_users
@@ -117,6 +124,11 @@ erDiagram
         bigint id PK
         bigint reservation_user_id FK
         bigint price_master_id FK
+    }
+    staff {
+        bigint id PK
+        string username UK
+        string password "BCryptハッシュ"
     }
     price_master {
         bigint id PK
