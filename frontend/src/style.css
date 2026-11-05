@@ -436,3 +436,13 @@ button.reservation-link:hover {
 @media (max-width: 480px) {
   .price-breakdown > div { flex-direction: column; gap: 4px; }
 }
+
+.login-page { max-width: 520px; margin: 40px auto; }
+.login-form fieldset { min-width: 0; padding: 0; margin: 0; border: 0; }
+.login-form label { margin-bottom: 8px; }
+.login-form input { width: 100%; min-width: 0; }
+.login-form label:first-of-type { margin-bottom: 24px; }
+.password-field { display: flex; gap: 8px; margin-bottom: 24px; }
+.password-field input { flex: 1; }
+.password-field button { flex-shrink: 0; }
+.staff-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }

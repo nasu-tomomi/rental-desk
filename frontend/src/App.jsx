@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from "react";
+import { apiFetch } from "./api";
 import ReservationDetail from "./ReservationDetail.jsx";
 import WalkInForm from "./WalkInForm.jsx";
+import LoginForm from "./LoginForm.jsx";
 
 const API_URL = "http://localhost:8080/api/reservations";
 const yen = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 0 });
 const display = (value) => (value == null || value === "" ? "-" : value);
 const money = (value) => (value == null ? "-" : `¥${yen.format(value)}`);
 
-export default function App() {
+function Reservations({ username, onLogout, loggingOut, logoutError }) {
   const [selectedId, setSelectedId] = useState(null);
   const [creating, setCreating] = useState(false);
   const [keyword, setKeyword] = useState("");
@@ -32,7 +34,7 @@ export default function App() {
       url.searchParams.set("keyword", searchKeyword.trim());
     if (searchDate) url.searchParams.set("rentalDate", searchDate);
     try {
-      const response = await fetch(url, { signal: controller.signal });
+      const response = await apiFetch(url, { signal: controller.signal });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       if (!Array.isArray(data)) throw new Error("Invalid response");
@@ -87,7 +89,14 @@ export default function App() {
       <header>
         <p className="app-name">Rental Desk</p>
         <h1>予約一覧</h1>
-        <button type="button" onClick={() => setCreating(true)}>当日受付</button>
+        <div className="staff-actions">
+          <button type="button" onClick={() => setCreating(true)} disabled={loggingOut}>当日受付</button>
+          <span>ログイン中：{username}</span>
+          <button type="button" className="secondary" onClick={onLogout} disabled={loggingOut}>
+            {loggingOut ? "ログアウト中…" : "ログアウト"}
+          </button>
+        </div>
+        {logoutError && <p className="error" role="alert">{logoutError}</p>}
       </header>
       <form onSubmit={search} className="search-form" aria-label="予約検索">
         <label htmlFor="keyword">
@@ -213,4 +222,62 @@ export default function App() {
       </div>
     </main>
   );
+}
+
+export default function App() {
+  const [session, setSession] = useState({ status: "checking", username: null });
+  const [attempt, setAttempt] = useState(0);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
+  const logoutBusy = useRef(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const expired = () => setSession({ status: "anonymous", username: null });
+    window.addEventListener("auth-expired", expired);
+    async function check() {
+      setSession({ status: "checking", username: null });
+      try {
+        const response = await apiFetch("http://localhost:8080/api/auth/me", { signal: controller.signal });
+        if (controller.signal.aborted) return;
+        if (response.status === 401) { expired(); return; }
+        if (!response.ok) throw new Error("Session check failed");
+        const user = await response.json();
+        if (!user?.username) throw new Error("Invalid session response");
+        if (!controller.signal.aborted) setSession({ status: "authenticated", username: user.username });
+      } catch {
+        if (!controller.signal.aborted) setSession({ status: "error", username: null });
+      }
+    }
+    check();
+    return () => { controller.abort(); window.removeEventListener("auth-expired", expired); };
+  }, [attempt]);
+
+  async function logout() {
+    if (logoutBusy.current) return;
+    logoutBusy.current = true;
+    setLoggingOut(true);
+    setLogoutError("");
+    try {
+      const response = await apiFetch("http://localhost:8080/api/auth/logout", { method: "POST" });
+      if (!response.ok && response.status !== 401) throw new Error("Logout failed");
+      setSession({ status: "anonymous", username: null });
+    } catch {
+      setLogoutError("ログアウトできませんでした。通信状態を確認してもう一度お試しください。");
+    } finally {
+      logoutBusy.current = false;
+      setLoggingOut(false);
+    }
+  }
+
+  if (session.status === "checking") return <main><p role="status">ログイン状態を確認中…</p></main>;
+  if (session.status === "error") return <main>
+    <p role="alert">ログイン状態を確認できませんでした。通信状態を確認してください。</p>
+    <button type="button" onClick={() => setAttempt((current) => current + 1)}>再試行</button>
+  </main>;
+  if (session.status === "anonymous") return <LoginForm onLogin={(username) => {
+    setLogoutError("");
+    setSession({ status: "authenticated", username });
+  }} />;
+  return <Reservations username={session.username} onLogout={logout} loggingOut={loggingOut} logoutError={logoutError} />;
 }

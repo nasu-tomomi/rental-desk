@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { apiFetch } from "./api";
 import { additionalItemNames } from "./rentalItems";
 
 const API_URL = "http://localhost:8080/api/reservations";
@@ -26,7 +27,7 @@ function estimate(user, prices) {
 }
 
 async function requestJson(url, options) {
-  const response = await fetch(url, options);
+  const response = await apiFetch(url, options);
   const data = await response.json().catch(() => null);
   if (!response.ok) throw new Error(data?.detail || `通信に失敗しました（HTTP ${response.status}）`);
   return data;

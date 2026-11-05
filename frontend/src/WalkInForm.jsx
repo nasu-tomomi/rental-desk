@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { apiFetch } from "./api";
 import { additionalItemNames } from "./rentalItems";
 
 function today() {
@@ -26,7 +27,7 @@ export default function WalkInForm({ onBack, onCreated }) {
     heading.current?.focus();
     async function loadPrices() {
       try {
-        const response = await fetch("http://localhost:8080/api/prices", { signal: controller.signal });
+        const response = await apiFetch("http://localhost:8080/api/prices", { signal: controller.signal });
         if (!response.ok) throw new Error();
         const data = await response.json();
         if (!Array.isArray(data) || !data.length) throw new Error();
@@ -59,7 +60,7 @@ export default function WalkInForm({ onBack, onCreated }) {
     const controller = new AbortController();
     activeSave.current = controller;
     try {
-      const response = await fetch("http://localhost:8080/api/reservations", {
+      const response = await apiFetch("http://localhost:8080/api/reservations", {
         method: "POST", signal: controller.signal,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
