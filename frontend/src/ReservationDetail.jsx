@@ -11,6 +11,11 @@ const date = (value) => display(value?.slice(0, 10));
 
 const additionalIds = (user) => user.additionalPriceMasterIds ?? (user.additionalItems ?? []).map((item) => item.priceMasterId);
 
+const editableUser = (user) => ({
+  id: user.id, priceMasterId: Number(user.priceMasterId), rentalDays: Number(user.rentalDays),
+  lentSizeMemo: user.lentSizeMemo || "", additionalPriceMasterIds: [...additionalIds(user)].sort((a, b) => a - b),
+});
+
 function itemEstimate(priceId, user, prices) {
   const price = prices.find((p) => p.id === Number(priceId) && p.division === user.division);
   const days = Number(user.rentalDays);
@@ -110,6 +115,9 @@ export default function ReservationDetail({ id, onBack }) {
 
   const amounts = users.map((user) => estimate(user, prices));
   const total = amounts.some((amount) => amount == null) ? null : amounts.reduce((sum, amount) => sum + amount, 0);
+  const hasChanges = staffMemo !== (reservation?.staffMemo ?? "")
+    || JSON.stringify(users.map(editableUser)) !== JSON.stringify((reservation?.users ?? []).map(editableUser));
+  const displayedTotal = hasChanges ? total : reservation?.totalAmount;
   const valid = users.length > 0 && total != null && total <= 2147483647;
   const statusActions = {
     "予約済": { status: "受付済", label: "受付する" },
@@ -242,14 +250,14 @@ export default function ReservationDetail({ id, onBack }) {
                 <caption className="sr-only">利用者ごとの品目と料金</caption>
                 <thead>
                   <tr>
-                    {["名前", "区分", "日数", "メイン品目", "経験", "身長 (cm)", "靴サイズ (cm)", "小物メモ", "貸出サイズメモ"].map((label) => (
+                    {["名前", "区分", "日数", "メイン品目", "経験", "身長 (cm)", "靴サイズ (cm)", "貸出サイズメモ"].map((label) => (
                       <th key={label} scope="col">{label}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {users.length === 0 ? (
-                    <tr><td colSpan={9} className="empty">利用者は登録されていません</td></tr>
+                    <tr><td colSpan={8} className="empty">利用者は登録されていません</td></tr>
                   ) : users.map((user, index) => (
                     <tr key={user.id}>
                       <td>{display(user.userName)}</td>
@@ -270,7 +278,6 @@ export default function ReservationDetail({ id, onBack }) {
                       <td>{display(user.experience)}</td>
                       <td>{display(user.height)}</td>
                       <td>{display(user.shoeSize)}</td>
-                      <td className="detail-text">{display(user.smallItems)}</td>
                       <td className="detail-text"><input type="text" maxLength={10000}
                         aria-label={`${user.userName || `利用者${index + 1}`}の貸出サイズメモ`} value={user.lentSizeMemo ?? ""}
                         onChange={(event) => editUser(user.id, "lentSizeMemo", event.target.value)} /></td>
@@ -281,6 +288,7 @@ export default function ReservationDetail({ id, onBack }) {
             </div>
             {users.map((user, index) => {
               const selected = additionalIds(user);
+              const mainPrice = prices.find((price) => price.id === Number(user.priceMasterId));
               const label = user.userName || `利用者${index + 1}`;
               const options = prices.filter((price) => price.division === user.division);
               const common = options.filter((price) => price.category === "スタンダード" && additionalItemNames.includes(price.item));
@@ -296,7 +304,7 @@ export default function ReservationDetail({ id, onBack }) {
               return <section key={user.id} className="user-breakdown" aria-label={`${label}の料金内訳と追加品目`}>
                 <h3>{label}：料金内訳</h3>
                 <dl className="price-breakdown">
-                  <div><dt>メイン：{prices.find((price) => price.id === Number(user.priceMasterId))?.item || "未選択"}</dt>
+                  <div><dt>メイン：{mainPrice ? `${mainPrice.category} / ${mainPrice.item}` : "未選択"}</dt>
                     <dd>{money(itemEstimate(user.priceMasterId, user, prices))}</dd></div>
                   {selected.map((priceId) => <div key={priceId}>
                     <dt>追加：{prices.find((price) => price.id === priceId)?.item || `品目ID ${priceId}`}</dt>
@@ -305,7 +313,6 @@ export default function ReservationDetail({ id, onBack }) {
                   {!selected.length && <div><dt>追加品目</dt><dd>なし</dd></div>}
                   <div className="breakdown-total"><dt>利用者合計</dt><dd>{money(amounts[index])}</dd></div>
                 </dl>
-                <p className="estimate-note">保存済みの利用者金額：{money(reservation.users.find((entry) => entry.id === user.id)?.amount)}</p>
                 <fieldset className="additional-options">
                   <legend>{label}の追加品目（{user.division}・{user.rentalDays}日間）</legend>
                   <div className="additional-grid">{common.map(choice)}</div>
@@ -318,8 +325,7 @@ export default function ReservationDetail({ id, onBack }) {
                 onChange={(event) => { setStaffMemo(event.target.value); setMessage(""); setSaveError(""); }} />
             </label>
             </fieldset>
-            <p className="detail-total" aria-live="polite">見込み合計 <strong>{money(total)}</strong></p>
-            <p className="confirmed-total">保存済みの確定合計：{money(reservation.totalAmount)}</p>
+            <p className="detail-total" aria-live="polite">合計 <strong>{money(displayedTotal)}</strong></p>
             {!valid && users.length > 0 && <p className="error">品目と日数（1〜365の整数）を確認してください。金額は上限2,147,483,647円以内で入力してください。</p>}
             {saveError && <p className="error" role="alert">{saveError}</p>}
             <p role="status" className={!saving && message ? "success" : undefined}>{saving ? "保存中…" : message}</p>
