@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { apiFetch } from "./api";
 import { additionalItemNames } from "./rentalItems";
 
@@ -51,7 +52,11 @@ function Fields({ items }) {
   );
 }
 
-export default function ReservationDetail({ id, onBack }) {
+export default function ReservationDetail() {
+  const { id: reservationId } = useParams();
+  const id = Number(reservationId);
+  const navigate = useNavigate();
+  const onBack = () => navigate("/");
   const [reservation, setReservation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");

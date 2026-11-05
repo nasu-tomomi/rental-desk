@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Navigate, Outlet, Route, Routes, useMatch, useNavigate } from "react-router-dom";
 import { apiFetch } from "./api";
 import ReservationDetail from "./ReservationDetail.jsx";
 import WalkInForm from "./WalkInForm.jsx";
@@ -11,8 +12,8 @@ const display = (value) => (value == null || value === "" ? "-" : value);
 const money = (value) => (value == null ? "-" : `¥${yen.format(value)}`);
 
 function Reservations({ loggingOut }) {
-  const [selectedId, setSelectedId] = useState(null);
-  const [creating, setCreating] = useState(false);
+  const navigate = useNavigate();
+  const showingList = useMatch("/") !== null;
   const [keyword, setKeyword] = useState("");
   const [rentalDate, setRentalDate] = useState("");
   const [reservations, setReservations] = useState([]);
@@ -52,11 +53,11 @@ function Reservations({ loggingOut }) {
   }
 
   useEffect(() => {
-    if (selectedId !== null || creating) return;
+    if (!showingList) return;
     const criteria = searchCriteria.current;
     loadReservations(criteria.keyword, criteria.rentalDate);
     return () => activeRequest.current?.abort();
-  }, [selectedId, creating]);
+  }, [showingList]);
 
   function search(event) {
     event.preventDefault();
@@ -69,28 +70,15 @@ function Reservations({ loggingOut }) {
     loadReservations();
   }
 
-  if (creating) {
-    return <WalkInForm onBack={() => setCreating(false)} onCreated={(reservation) => {
-      setSelectedId(reservation.id);
-      setCreating(false);
-    }} />;
-  }
-
-  if (selectedId !== null) {
-    return (
-      <ReservationDetail
-        id={selectedId}
-        onBack={() => setSelectedId(null)}
-      />
-    );
-  }
+  // Keep search criteria mounted while detail and walk-in routes are displayed.
+  if (!showingList) return <Outlet />;
 
   return (
     <main>
       <header>
         <h1>予約一覧</h1>
         <div className="walk-in-action">
-          <button type="button" onClick={() => setCreating(true)} disabled={loggingOut}>当日受付</button>
+          <button type="button" onClick={() => navigate("/walk-in")} disabled={loggingOut}>当日受付</button>
         </div>
       </header>
       <form onSubmit={search} className="search-form" aria-label="予約検索">
@@ -176,7 +164,7 @@ function Reservations({ loggingOut }) {
                 <tr
                   key={reservation.id}
                   className={`reservation-row${reservation.status === "キャンセル" ? " reservation-row-cancelled" : ""}`}
-                  onClick={() => setSelectedId(reservation.id)}
+                  onClick={() => navigate(`/reservations/${reservation.id}`)}
                 >
                   <td className="number">{display(reservation.id)}</td>
                   <td>{display(reservation.rentalDate)}</td>
@@ -192,7 +180,7 @@ function Reservations({ loggingOut }) {
                       aria-label={`${display(reservation.applicantName)}の予約詳細`}
                       onClick={(event) => {
                         event.stopPropagation();
-                        setSelectedId(reservation.id);
+                        navigate(`/reservations/${reservation.id}`);
                       }}
                     >
                       {`${display(reservation.applicantName)}（${display(reservation.applicantKana)}）`}
@@ -220,6 +208,7 @@ function Reservations({ loggingOut }) {
 }
 
 export default function App() {
+  const navigate = useNavigate();
   const [session, setSession] = useState({ status: "checking", username: null });
   const [attempt, setAttempt] = useState(0);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -270,12 +259,25 @@ export default function App() {
     <p role="alert">ログイン状態を確認できませんでした。通信状態を確認してください。</p>
     <button type="button" onClick={() => setAttempt((current) => current + 1)}>再試行</button>
   </main>;
-  if (session.status === "anonymous") return <LoginForm onLogin={(username) => {
-    setLogoutError("");
-    setSession({ status: "authenticated", username });
-  }} />;
-  return <>
-    <StaffHeader username={session.username} onLogout={logout} loggingOut={loggingOut} logoutError={logoutError} />
-    <Reservations loggingOut={loggingOut} />
-  </>;
+  return <Routes>
+    <Route path="/login" element={session.status === "anonymous" ? <LoginForm onLogin={(username) => {
+      setLogoutError("");
+      setSession({ status: "authenticated", username });
+      navigate("/", { replace: true });
+    }} /> : <Navigate to="/" replace />} />
+    <Route element={session.status === "authenticated" ? <>
+      <StaffHeader username={session.username} onLogout={logout} loggingOut={loggingOut} logoutError={logoutError} />
+      <Outlet />
+    </> : <Navigate to="/login" replace />}>
+      <Route path="/" element={<Reservations loggingOut={loggingOut} />}>
+        <Route index element={null} />
+        <Route path="reservations/:id" element={<ReservationDetail />} />
+        <Route path="walk-in" element={<WalkInForm
+          onBack={() => navigate("/")}
+          onCreated={(reservation) => navigate(`/reservations/${reservation.id}`)}
+        />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Route>
+  </Routes>;
 }
