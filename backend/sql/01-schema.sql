@@ -30,6 +30,7 @@ CREATE TABLE `reservations` (
   `payment_method` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `total_amount` int DEFAULT '0',
   `note` text COLLATE utf8mb4_unicode_ci,
+  `staff_memo` text COLLATE utf8mb4_unicode_ci,
   `status` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)

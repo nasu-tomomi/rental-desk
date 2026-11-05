@@ -652,6 +652,76 @@ class ReservationApiTest {
         assertThat(count("reservation_user_items")).isEqualTo(3);
     }
 
+    private ReservationUsersRequest memoEdit(ReservationResponse reservation, String memo) {
+        return new ReservationUsersRequest(java.util.List.of(new ReservationUsersRequest.User(
+            reservation.users().get(0).id(), 1L, 2, "貸出サイズメモ")), memo);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"予約済", "受付済", "貸出中"})
+    void savesStaffMemoWithUsersAndReturnsItInDetailWithoutChangingApplicantNote(String reservationStatus) throws Exception {
+        var input = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(REQUEST);
+        input.put("note", "申込時の備考：到着が遅れます");
+        var created = service.create(mapper.treeToValue(input, ReservationRequest.class));
+        jdbc.update("UPDATE reservations SET status = ? WHERE id = ?", reservationStatus, created.id());
+        String memo = "グローブ追加、料金徴収済み\n担当：staff";
+        mvc.perform(patch("/api/reservations/{id}/users", created.id()).contentType("application/json")
+                .content(mapper.writeValueAsString(memoEdit(created, memo))))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.staffMemo").value(memo))
+            .andExpect(jsonPath("$.totalAmount").value(10000))
+            .andExpect(jsonPath("$.users[0].rentalDays").value(2));
+        mvc.perform(get("/api/reservations/{id}", created.id())).andExpect(status().isOk())
+            .andExpect(jsonPath("$.staffMemo").value(memo))
+            .andExpect(jsonPath("$.note").value("申込時の備考：到着が遅れます"));
+        assertThat(jdbc.queryForObject("SELECT staff_memo FROM reservations WHERE id = ?", String.class, created.id()))
+            .isEqualTo(memo);
+    }
+
+    @Test void preservesOmittedOrNullStaffMemoAndClearsWithEmptyString() throws Exception {
+        var created = service.create(mapper.readValue(REQUEST, ReservationRequest.class));
+        service.updateUsers(created.id(), memoEdit(created, "スタッフ記録"));
+        String withoutMemo = "{\"users\":[" + userEdit(created.users().get(0).id(), 1L, 2, null) + "]}";
+        mvc.perform(patch("/api/reservations/{id}/users", created.id()).contentType("application/json").content(withoutMemo))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.staffMemo").value("スタッフ記録"));
+        assertThat(service.updateUsers(created.id(), memoEdit(created, null)).staffMemo()).isEqualTo("スタッフ記録");
+        mvc.perform(patch("/api/reservations/{id}/users", created.id()).contentType("application/json")
+                .content(mapper.writeValueAsString(memoEdit(created, ""))))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.staffMemo").value(""));
+        assertThat(service.get(created.id()).staffMemo()).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"キャンセル", "返却済"})
+    void rejectsStaffMemoEditsForClosedReservations(String reservationStatus) throws Exception {
+        var created = service.create(mapper.readValue(REQUEST, ReservationRequest.class));
+        jdbc.update("UPDATE reservations SET status = ? WHERE id = ?", reservationStatus, created.id());
+        mvc.perform(patch("/api/reservations/{id}/users", created.id()).contentType("application/json")
+                .content(mapper.writeValueAsString(memoEdit(created, "変更不可"))))
+            .andExpect(status().isBadRequest());
+        assertThat(service.get(created.id()).staffMemo()).isNull();
+        assertThat(service.get(created.id()).totalAmount()).isEqualTo(13000);
+    }
+
+    @Test void rejectsOverlongStaffMemoWithoutSavingUsers() throws Exception {
+        var created = service.create(mapper.readValue(REQUEST, ReservationRequest.class));
+        mvc.perform(patch("/api/reservations/{id}/users", created.id()).contentType("application/json")
+                .content(mapper.writeValueAsString(memoEdit(created, "あ".repeat(10001)))))
+            .andExpect(status().isBadRequest());
+        assertThat(service.get(created.id()).staffMemo()).isNull();
+        assertThat(service.get(created.id()).totalAmount()).isEqualTo(13000);
+    }
+
+    @Test void rollsBackStaffMemoAndUsersTogetherWhenTotalSaveFails() throws Exception {
+        var created = service.create(mapper.readValue(REQUEST, ReservationRequest.class));
+        service.updateUsers(created.id(), memoEdit(created, "元の記録"));
+        String before = mapper.writeValueAsString(service.get(created.id()));
+        doThrow(new IllegalStateException("simulated total save failure"))
+            .when(repository).updateTotal(eq(created.id()), anyInt());
+        assertThatThrownBy(() -> service.updateUsers(created.id(), memoEdit(created, "新しい記録")))
+            .isInstanceOf(IllegalStateException.class);
+        assertThat(mapper.writeValueAsString(service.get(created.id()))).isEqualTo(before);
+    }
+
     private int count(String table) {
         return jdbc.queryForObject("SELECT COUNT(*) FROM " + table, Integer.class);
     }

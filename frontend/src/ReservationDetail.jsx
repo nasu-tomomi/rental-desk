@@ -52,6 +52,7 @@ export default function ReservationDetail({ id, onBack }) {
   const [error, setError] = useState("");
   const [prices, setPrices] = useState([]);
   const [users, setUsers] = useState([]);
+  const [staffMemo, setStaffMemo] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [message, setMessage] = useState("");
@@ -67,6 +68,7 @@ export default function ReservationDetail({ id, onBack }) {
     setReservation(null);
     setPrices([]);
     setUsers([]);
+    setStaffMemo("");
     setSaveError("");
     setMessage("");
     setSaving(false);
@@ -86,6 +88,7 @@ export default function ReservationDetail({ id, onBack }) {
         if (!controller.signal.aborted) {
           setReservation(data);
           setUsers(data.users);
+          setStaffMemo(data.staffMemo ?? "");
           setPrices(priceData);
         }
       } catch (cause) {
@@ -137,7 +140,7 @@ export default function ReservationDetail({ id, onBack }) {
       const updated = await requestJson(`${API_URL}/${encodeURIComponent(id)}/users`, {
         method: "PATCH", signal: controller.signal,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ users: users.map((user) => ({
+        body: JSON.stringify({ staffMemo, users: users.map((user) => ({
           id: user.id, priceMasterId: Number(user.priceMasterId), rentalDays: Number(user.rentalDays),
           lentSizeMemo: user.lentSizeMemo || null,
           additionalPriceMasterIds: additionalIds(user),
@@ -146,6 +149,7 @@ export default function ReservationDetail({ id, onBack }) {
       if (controller.signal.aborted) return;
       setReservation(updated);
       setUsers(updated.users);
+      setStaffMemo(updated.staffMemo ?? "");
       saved = true;
       if (status) {
         const advanced = await requestJson(`${API_URL}/${encodeURIComponent(id)}/status`, {
@@ -155,6 +159,7 @@ export default function ReservationDetail({ id, onBack }) {
         if (controller.signal.aborted) return;
         setReservation(advanced);
         setUsers(advanced.users);
+        setStaffMemo(advanced.staffMemo ?? "");
       }
       setMessage(status ? `変更を保存し、${status}に更新しました。` : "変更を保存しました。");
     } catch (cause) {
@@ -308,6 +313,11 @@ export default function ReservationDetail({ id, onBack }) {
                 </fieldset>
               </section>;
             })}
+            <label className="staff-memo" htmlFor="staff-memo">スタッフメモ
+              <textarea id="staff-memo" rows={4} maxLength={10000} value={staffMemo}
+                placeholder="例：グローブ追加、料金徴収済み"
+                onChange={(event) => { setStaffMemo(event.target.value); setMessage(""); setSaveError(""); }} />
+            </label>
             </fieldset>
             <p className="detail-total" aria-live="polite">見込み合計 <strong>{money(total)}</strong></p>
             <p className="confirmed-total">保存済みの確定合計：{money(reservation.totalAmount)}</p>

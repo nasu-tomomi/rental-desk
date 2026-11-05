@@ -80,6 +80,10 @@ public class ReservationService {
             throw new NoSuchElementException("指定された予約が存在しません");
         }
         var current = get(id);
+        if (request.staffMemo() != null &&
+                ("キャンセル".equals(current.status()) || "返却済".equals(current.status()))) {
+            throw new IllegalArgumentException("キャンセル・返却済の予約ではスタッフメモを編集できません");
+        }
         var amounts = new java.util.HashMap<Long, Integer>();
         for (var user : request.users()) {
             if (amounts.containsKey(user.id())) {
@@ -103,6 +107,7 @@ public class ReservationService {
                 userItems.replace(user.id(), user.additionalPriceMasterIds());
             }
         }
+        if (request.staffMemo() != null) repository.updateStaffMemo(id, request.staffMemo());
         repository.updateTotal(id, total);
         return get(id);
     }

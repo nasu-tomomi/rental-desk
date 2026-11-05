@@ -26,7 +26,8 @@
 - payment_method（ネット：来店時／PayPal、当日：現金／カード／PayPay）
 - total_amount（利用者ごとの金額の合計、自動計算）
 - status：予約済 / 受付済 / 貸出中 / 返却済 / キャンセル
-- note（備考）
+- note（申込時の備考）
+- staff_memo（スタッフの現場記録。申込時の備考とは分けて保存）
 - created_at
 
 ### reservation_users（利用者）— 予約に1〜複数人（最大20人ほど）
@@ -103,7 +104,8 @@ erDiagram
         string payment_method
         int total_amount
         string status "予約済/受付済/貸出中/返却済/キャンセル"
-        text note
+        text note "申込時の備考"
+        text staff_memo "スタッフメモ"
         datetime created_at
     }
     reservation_users {

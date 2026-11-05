@@ -5,8 +5,11 @@ import jakarta.validation.constraints.*;
 import java.util.List;
 
 public record ReservationUsersRequest(
-    @NotEmpty @Size(max = 20) List<@NotNull @Valid User> users
+    @NotEmpty @Size(max = 20) List<@NotNull @Valid User> users,
+    @Size(max = 10000) String staffMemo
 ) {
+    public ReservationUsersRequest(List<User> users) { this(users, null); }
+
     public record User(
         @NotNull @Positive Long id,
         @NotNull @Positive Long priceMasterId,

@@ -54,6 +54,11 @@ public class ReservationRepository {
         jdbc.sql("DELETE FROM reservations WHERE id = :id").param("id", id).update();
     }
 
+    public void updateStaffMemo(long id, String memo) {
+        jdbc.sql("UPDATE reservations SET staff_memo = :memo WHERE id = :id")
+            .param("memo", memo).param("id", id).update();
+    }
+
     public void updateTotal(long id, int total) {
         jdbc.sql("UPDATE reservations SET total_amount = :total WHERE id = :id")
             .param("total", total).param("id", id).update();
@@ -147,7 +152,7 @@ public class ReservationRepository {
         return rows.stream().map(r -> new ReservationResponse(r.id(), r.source(), r.applicantName(),
             r.applicantKana(), r.mobilePhone(), r.contactId(), r.email(), r.pickupStore(), r.rentalDate(),
             r.pickupTime(), r.returnDatetime(), r.skiResort(), r.transport(), r.accommodation(),
-            r.paymentMethod(), r.totalAmount(), r.note(), r.status(), r.createdAt(),
+            r.paymentMethod(), r.totalAmount(), r.note(), r.staffMemo(), r.status(), r.createdAt(),
             grouped.getOrDefault(r.id(), List.of()))).toList();
     }
 
@@ -177,7 +182,7 @@ public class ReservationRepository {
             rs.getString("email"), rs.getString("pickup_store"), rs.getObject("rental_date", LocalDate.class),
             rs.getObject("pickup_time", LocalTime.class), rs.getObject("return_datetime", LocalDateTime.class),
             rs.getString("ski_resort"), rs.getString("transport"), rs.getString("accommodation"),
-            rs.getString("payment_method"), rs.getInt("total_amount"), rs.getString("note"),
+            rs.getString("payment_method"), rs.getInt("total_amount"), rs.getString("note"), rs.getString("staff_memo"),
             rs.getString("status"), rs.getObject("created_at", LocalDateTime.class), users);
     }
 }

@@ -8,7 +8,7 @@ public record ReservationResponse(
     String mobilePhone, String contactId, String email, String pickupStore,
     LocalDate rentalDate, LocalTime pickupTime, LocalDateTime returnDatetime,
     String skiResort, String transport, String accommodation, String paymentMethod,
-    int totalAmount, String note, String status, LocalDateTime createdAt,
+    int totalAmount, String note, String staffMemo, String status, LocalDateTime createdAt,
     List<User> users
 ) {
     public record User(long id, String userName, String division, Integer rentalDays,
