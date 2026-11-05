@@ -559,6 +559,8 @@ button.reservation-link:hover {
   flex-shrink: 0;
 }
 .staff-header {
+  max-width: 1440px;
+  margin: 0 auto;
   position: sticky;
   top: 0;
   z-index: 10;
